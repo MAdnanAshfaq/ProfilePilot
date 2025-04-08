@@ -8,6 +8,7 @@ import { ProtectedRoute } from "./lib/protected-route";
 import AuthPage from "@/pages/auth-page";
 import DashboardPage from "@/pages/dashboard-page";
 import ProfilesPage from "@/pages/profiles-page";
+import ManageProfilesPage from "@/pages/manage-profiles-page";
 import TargetsPage from "@/pages/targets-page";
 import ReportsPage from "@/pages/reports-page";
 import MyProfilePage from "@/pages/my-profile-page";
@@ -26,6 +27,7 @@ function Router() {
       
       {/* Manager routes */}
       <ProtectedRoute path="/profiles" component={ProfilesPage} />
+      <ProtectedRoute path="/manage-profiles" component={ManageProfilesPage} />
       <ProtectedRoute path="/targets" component={TargetsPage} />
       <ProtectedRoute path="/reports" component={ReportsPage} />
       

@@ -28,11 +28,16 @@ export const profiles = pgTable("profiles", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description").notNull(),
+  resumeContent: text("resume_content"), // Store the resume content or file path
+  createdBy: integer("created_by").references(() => users.id), // Track who created the profile
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertProfileSchema = createInsertSchema(profiles).pick({
   name: true,
   description: true,
+  resumeContent: true,
+  createdBy: true,
 });
 
 export type InsertProfile = z.infer<typeof insertProfileSchema>;

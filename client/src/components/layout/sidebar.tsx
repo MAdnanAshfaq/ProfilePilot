@@ -5,6 +5,7 @@ import {
   BarChart2,
   ChevronLeft,
   ClipboardList,
+  FileText,
   Home,
   LineChart,
   LogOut,
@@ -34,6 +35,7 @@ export function Sidebar({ className }: SidebarProps) {
   const links = {
     manager: [
       { href: "/", icon: <Home size={20} />, label: "Dashboard" },
+      { href: "/manage-profiles", icon: <FileText size={20} />, label: "Manage Profiles" },
       { href: "/profiles", icon: <Users size={20} />, label: "Profile Assignment" },
       { href: "/targets", icon: <Target size={20} />, label: "Set Targets" },
       { href: "/reports", icon: <BarChart2 size={20} />, label: "Reports" },

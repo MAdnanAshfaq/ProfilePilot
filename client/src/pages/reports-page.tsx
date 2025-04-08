@@ -58,14 +58,14 @@ export default function ReportsPage() {
   });
   
   // Function to download a report
-  const downloadReport = (reportType: string, format: 'csv' | 'pdf') => {
+  const downloadReport = (reportType: string, fileFormat: 'csv' | 'pdf') => {
     if (reportType === 'team-performance') {
       // Direct download using window.location
       window.location.href = `/api/reports/team-performance?fromDate=${format(dateRange.from, 'yyyy-MM-dd')}&toDate=${format(dateRange.to, 'yyyy-MM-dd')}`;
       
       toast({
         title: "Report Downloaded",
-        description: `Team Performance report downloaded in ${format.toUpperCase()} format.`,
+        description: `Team Performance report downloaded in ${fileFormat.toUpperCase()} format.`,
       });
     } else if (reportType === 'lead-entries') {
       // Direct download using window.location
@@ -73,7 +73,7 @@ export default function ReportsPage() {
       
       toast({
         title: "Report Downloaded",
-        description: `Lead Entries report downloaded in ${format.toUpperCase()} format.`,
+        description: `Lead Entries report downloaded in ${fileFormat.toUpperCase()} format.`,
       });
     }
   };

@@ -4,6 +4,9 @@ import createMemoryStore from "memorystore";
 
 const MemoryStore = createMemoryStore(session);
 
+// Define a generic session store type for simplicity
+type SessionStore = any;
+
 // Interface for storage operations
 export interface IStorage {
   // User operations
@@ -16,6 +19,8 @@ export interface IStorage {
   getProfile(id: number): Promise<Profile | undefined>;
   getProfiles(): Promise<Profile[]>;
   createProfile(profile: InsertProfile): Promise<Profile>;
+  updateProfile(id: number, profile: Partial<InsertProfile>): Promise<Profile | undefined>;
+  deleteProfile(id: number): Promise<boolean>;
   
   // Lead Gen Assignment operations
   getLeadGenAssignment(userId: number): Promise<LeadGenAssignment | undefined>;
@@ -48,7 +53,7 @@ export interface IStorage {
   getTeamPerformanceData(fromDate?: Date, toDate?: Date): Promise<any[]>;
   
   // Session store
-  sessionStore: session.SessionStore;
+  sessionStore: SessionStore;
 }
 
 // Memory storage implementation
@@ -69,7 +74,7 @@ export class MemStorage implements IStorage {
   currentProgressUpdateId: number;
   currentLeadEntryId: number;
   
-  sessionStore: session.SessionStore;
+  sessionStore: SessionStore;
 
   constructor() {
     this.users = new Map();
@@ -147,9 +152,59 @@ export class MemStorage implements IStorage {
   
   async createProfile(insertProfile: InsertProfile): Promise<Profile> {
     const id = this.currentProfileId++;
-    const profile: Profile = { ...insertProfile, id };
+    const profile: Profile = {
+      ...insertProfile,
+      id,
+      resumeContent: insertProfile.resumeContent || null,
+      createdBy: insertProfile.createdBy || null,
+      createdAt: new Date(),
+    };
     this.profiles.set(id, profile);
     return profile;
+  }
+  
+  async updateProfile(id: number, updatedFields: Partial<InsertProfile>): Promise<Profile | undefined> {
+    const profile = this.profiles.get(id);
+    if (!profile) return undefined;
+    
+    const updatedProfile = { ...profile, ...updatedFields };
+    this.profiles.set(id, updatedProfile);
+    
+    return updatedProfile;
+  }
+  
+  async deleteProfile(id: number): Promise<boolean> {
+    // First check if the profile is assigned to any users
+    const leadGenAssignments = Array.from(this.leadGenAssignments.values()).filter(
+      assignment => assignment.profileId === id
+    );
+    
+    const salesAssignments = Array.from(this.salesAssignments.values()).filter(
+      assignment => assignment.profileId === id
+    );
+    
+    const targets = Array.from(this.targets.values()).filter(
+      target => target.profileId === id
+    );
+    
+    const progressUpdates = Array.from(this.progressUpdates.values()).filter(
+      update => update.profileId === id
+    );
+    
+    const leadEntries = Array.from(this.leadEntries.values()).filter(
+      entry => entry.profileId === id
+    );
+    
+    // If profile is in use, don't delete
+    if (leadGenAssignments.length > 0 || 
+        salesAssignments.length > 0 || 
+        targets.length > 0 || 
+        progressUpdates.length > 0 || 
+        leadEntries.length > 0) {
+      return false;
+    }
+    
+    return this.profiles.delete(id);
   }
   
   // Lead Gen Assignment operations
@@ -262,7 +317,11 @@ export class MemStorage implements IStorage {
   
   async createProgressUpdate(insertUpdate: InsertProgressUpdate): Promise<ProgressUpdate> {
     const id = this.currentProgressUpdateId++;
-    const update: ProgressUpdate = { ...insertUpdate, id };
+    const update: ProgressUpdate = { 
+      ...insertUpdate, 
+      id,
+      notes: insertUpdate.notes || null 
+    };
     this.progressUpdates.set(id, update);
     return update;
   }
@@ -288,7 +347,11 @@ export class MemStorage implements IStorage {
   
   async createLeadEntry(insertEntry: InsertLeadEntry): Promise<LeadEntry> {
     const id = this.currentLeadEntryId++;
-    const entry: LeadEntry = { ...insertEntry, id };
+    const entry: LeadEntry = { 
+      ...insertEntry, 
+      id,
+      notes: insertEntry.notes || null 
+    };
     this.leadEntries.set(id, entry);
     return entry;
   }

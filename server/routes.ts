@@ -42,6 +42,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  app.get("/api/profiles/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const profile = await storage.getProfile(id);
+      
+      if (profile) {
+        res.json(profile);
+      } else {
+        res.status(404).json({ message: "Profile not found" });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch profile" });
+    }
+  });
+  
   app.post("/api/profiles", hasRole(["manager"]), async (req, res) => {
     try {
       const validationResult = insertProfileSchema.safeParse(req.body);
@@ -53,6 +68,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(profile);
     } catch (error) {
       res.status(500).json({ message: "Failed to create profile" });
+    }
+  });
+  
+  app.patch("/api/profiles/:id", hasRole(["manager"]), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const updatedProfile = await storage.updateProfile(id, req.body);
+      
+      if (updatedProfile) {
+        res.json(updatedProfile);
+      } else {
+        res.status(404).json({ message: "Profile not found" });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+  
+  app.delete("/api/profiles/:id", hasRole(["manager"]), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const success = await storage.deleteProfile(id);
+      
+      if (success) {
+        res.status(204).send();
+      } else {
+        res.status(404).json({ message: "Profile not found" });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete profile" });
     }
   });
   
