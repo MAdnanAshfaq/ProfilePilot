@@ -30,6 +30,7 @@ export interface IStorage {
   getLeadGenAssignment(userId: number): Promise<LeadGenAssignment | undefined>;
   getLeadGenAssignments(): Promise<LeadGenAssignment[]>;
   createLeadGenAssignment(assignment: InsertLeadGenAssignment): Promise<LeadGenAssignment>;
+  deleteLeadGenAssignment(userId: number): Promise<boolean>;
   updateLeadGenAssignment(userId: number, profileId: number): Promise<LeadGenAssignment | undefined>;
   
   // Sales Assignment operations
@@ -271,6 +272,13 @@ export class MemStorage implements IStorage {
     const newAssignment: LeadGenAssignment = { ...assignment, id };
     this.leadGenAssignments.set(id, newAssignment);
     return newAssignment;
+  }
+  
+  async deleteLeadGenAssignment(userId: number): Promise<boolean> {
+    const assignment = await this.getLeadGenAssignment(userId);
+    if (!assignment) return false;
+    
+    return this.leadGenAssignments.delete(assignment.id);
   }
   
   async updateLeadGenAssignment(userId: number, profileId: number): Promise<LeadGenAssignment | undefined> {

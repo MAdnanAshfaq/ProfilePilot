@@ -8,7 +8,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loading } from "@/components/ui/loading";
 import { DataTable } from "@/components/ui/data-table";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Edit, MoreHorizontal } from "lucide-react";
+import { Plus, Edit, MoreHorizontal, Trash } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -149,6 +149,26 @@ export default function ProfilesPage() {
     },
   });
 
+  const deleteLeadGenAssignmentMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      return apiRequest("DELETE", `/api/lead-gen-assignments/${userId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen-assignments"] });
+      toast({
+        title: "Assignment removed",
+        description: "Profile assignment has been successfully removed.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to remove assignment",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const deleteSalesAssignmentMutation = useMutation({
     mutationFn: async (id: number) => {
       return apiRequest("DELETE", `/api/sales-assignments/${id}`);
@@ -191,19 +211,31 @@ export default function ProfilesPage() {
     {
       id: "actions",
       cell: ({ row }) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            // Pre-fill form for editing
-            leadGenForm.setValue("userId", row.original.userId.toString());
-            leadGenForm.setValue("profileId", row.original.profileId.toString());
-            setIsLeadGenDialogOpen(true);
-          }}
-        >
-          <Edit className="h-4 w-4 mr-2" />
-          Edit
-        </Button>
+        <div className="flex space-x-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              // Pre-fill form for editing
+              leadGenForm.setValue("userId", row.original.userId.toString());
+              leadGenForm.setValue("profileId", row.original.profileId.toString());
+              setIsLeadGenDialogOpen(true);
+            }}
+          >
+            <Edit className="h-4 w-4 mr-2" />
+            Edit
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              deleteLeadGenAssignmentMutation.mutate(row.original.userId);
+            }}
+          >
+            <Trash className="h-4 w-4 mr-2 text-red-500" />
+            <span className="text-red-500">Remove</span>
+          </Button>
+        </div>
       ),
     },
   ];
@@ -237,6 +269,7 @@ export default function ProfilesPage() {
             deleteSalesAssignmentMutation.mutate(row.original.id);
           }}
         >
+          <Trash className="h-4 w-4 mr-2 text-red-500" />
           <span className="text-red-500">Remove</span>
         </Button>
       ),

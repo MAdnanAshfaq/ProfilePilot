@@ -195,6 +195,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  app.delete("/api/lead-gen-assignments/:userId", hasRole(["manager"]), async (req, res) => {
+    try {
+      const userId = Number(req.params.userId);
+      const success = await storage.deleteLeadGenAssignment(userId);
+      
+      if (success) {
+        res.status(204).send();
+      } else {
+        res.status(404).json({ message: "Assignment not found" });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete lead generation assignment" });
+    }
+  });
+  
   // Sales Assignment routes
   app.get("/api/sales-assignments", hasRole(["manager"]), async (req, res) => {
     try {
@@ -606,10 +621,11 @@ app.get("/api/reports/weekly-sales", hasRole(["manager"]), async (req, res) => {
     }
     
     const reportText = await generateWeeklySalesReport(fromDate, toDate);
-    const dateRange = formatReportDateRange(fromDate, toDate);
+    const dateRange = formatReportDateRange(fromDate, toDate)
+      .replace(/[^\w.-]/g, '_'); // Remove problematic characters from filename
     
     res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="Weekly Report Sales(${dateRange}).txt"`);
+    res.setHeader('Content-Disposition', `attachment; filename=Weekly_Report_Sales_${dateRange}.txt`);
     
     res.send(reportText);
   } catch (error) {
@@ -627,7 +643,7 @@ app.get("/api/reports/daily", hasRole(["manager"]), async (req, res) => {
     const formattedDate = date.toISOString().split('T')[0];
     
     res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="Daily Report ${formattedDate}.txt"`);
+    res.setHeader('Content-Disposition', `attachment; filename=Daily_Report_${formattedDate}.txt`);
     
     res.send(reportText);
   } catch (error) {

@@ -16,6 +16,7 @@
 .bg-primary.text-white,
 .bg-primary .text-white {
   @apply font-medium;
+  color: white !important;
 }
 
 /* Improve visibility for texts on blue labels */
@@ -27,4 +28,18 @@
 .bg-primary.bg-opacity-10.text-primary,
 .bg-primary .text-primary {
   @apply font-medium;
+}
+
+/* Ensure icons inside primary buttons have good contrast */
+.bg-primary svg,
+.bg-primary button svg,
+.bg-primary a svg {
+  @apply font-medium;
+  color: white !important;
+}
+
+/* Enhanced visibility for badges */
+.rounded-full.bg-primary {
+  @apply font-medium;
+  color: white !important;
 }
