@@ -8,7 +8,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loading } from "@/components/ui/loading";
 import { DataTable } from "@/components/ui/data-table";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Edit, MoreHorizontal, Trash } from "lucide-react";
+import { Plus, Edit, MoreHorizontal, Trash, Check } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // Validation schema
 const assignLeadGenSchema = z.object({
@@ -38,7 +39,7 @@ const assignLeadGenSchema = z.object({
 
 const assignSalesSchema = z.object({
   userId: z.string().min(1, "Please select a sales coordinator"),
-  profileId: z.string().min(1, "Please select a profile"),
+  profileIds: z.array(z.string()).min(1, "Please select at least one profile"),
 });
 
 type AssignLeadGenFormData = z.infer<typeof assignLeadGenSchema>;
@@ -63,7 +64,7 @@ export default function ProfilesPage() {
     resolver: zodResolver(assignSalesSchema),
     defaultValues: {
       userId: "",
-      profileId: "",
+      profileIds: [],
     },
   });
 
@@ -126,23 +127,27 @@ export default function ProfilesPage() {
 
   const assignSalesMutation = useMutation({
     mutationFn: async (data: AssignSalesFormData) => {
-      return apiRequest("POST", "/api/sales-assignments", {
-        userId: parseInt(data.userId),
-        profileId: parseInt(data.profileId),
-      });
+      // Create a batch of assignments for the selected profiles
+      const promises = data.profileIds.map(profileId => 
+        apiRequest("POST", "/api/sales-assignments", {
+          userId: parseInt(data.userId),
+          profileId: parseInt(profileId),
+        })
+      );
+      return Promise.all(promises);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/sales-assignments"] });
       setIsSalesDialogOpen(false);
       salesForm.reset();
       toast({
-        title: "Profile assigned",
-        description: "Profile has been successfully assigned to the sales coordinator.",
+        title: "Profiles assigned",
+        description: "Selected profiles have been successfully assigned to the sales coordinator.",
       });
     },
     onError: (error) => {
       toast({
-        title: "Failed to assign profile",
+        title: "Failed to assign profiles",
         description: error.message,
         variant: "destructive",
       });
@@ -484,7 +489,7 @@ export default function ProfilesPage() {
       <Dialog open={isSalesDialogOpen} onOpenChange={setIsSalesDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign Profile to Sales Coordinator</DialogTitle>
+            <DialogTitle>Assign Profiles to Sales Coordinator</DialogTitle>
           </DialogHeader>
           
           <form onSubmit={salesForm.handleSubmit(onSalesSubmit)}>
@@ -514,25 +519,44 @@ export default function ProfilesPage() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="salesProfile">Select Profile</Label>
-                <Select 
-                  onValueChange={(value) => salesForm.setValue("profileId", value)}
-                  value={salesForm.watch("profileId")}
-                >
-                  <SelectTrigger id="salesProfile">
-                    <SelectValue placeholder="Select a profile" />
-                  </SelectTrigger>
-                  <SelectContent>
+                <Label>Select Profiles</Label>
+                <div className="border rounded-md p-3 max-h-60 overflow-y-auto">
+                  <div className="space-y-3">
                     {profiles?.map((profile: any) => (
-                      <SelectItem key={profile.id} value={profile.id.toString()}>
-                        {profile.name}
-                      </SelectItem>
+                      <div className="flex items-center space-x-2" key={profile.id}>
+                        <Checkbox 
+                          id={`profile-${profile.id}`}
+                          onCheckedChange={(checked) => {
+                            const profileIds = salesForm.watch("profileIds") || [];
+                            const profileIdStr = profile.id.toString();
+                            
+                            // If checked, add to array; if unchecked, remove from array
+                            if (checked) {
+                              if (!profileIds.includes(profileIdStr)) {
+                                salesForm.setValue("profileIds", [...profileIds, profileIdStr]);
+                              }
+                            } else {
+                              salesForm.setValue(
+                                "profileIds", 
+                                profileIds.filter((id: string) => id !== profileIdStr)
+                              );
+                            }
+                          }}
+                          checked={salesForm.watch("profileIds")?.includes(profile.id.toString())}
+                        />
+                        <label
+                          htmlFor={`profile-${profile.id}`}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                          {profile.name}
+                        </label>
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
-                {salesForm.formState.errors.profileId && (
+                  </div>
+                </div>
+                {salesForm.formState.errors.profileIds && (
                   <p className="text-sm text-red-500">
-                    {salesForm.formState.errors.profileId.message}
+                    {salesForm.formState.errors.profileIds.message}
                   </p>
                 )}
               </div>
@@ -550,7 +574,7 @@ export default function ProfilesPage() {
                 type="submit" 
                 disabled={assignSalesMutation.isPending}
               >
-                {assignSalesMutation.isPending ? "Saving..." : "Save Assignment"}
+                {assignSalesMutation.isPending ? "Saving..." : "Save Assignments"}
               </Button>
             </DialogFooter>
           </form>

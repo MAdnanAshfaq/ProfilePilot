@@ -88,27 +88,73 @@ function ManagerStats() {
 }
 
 function ManagerCharts() {
-  // Weekly performance data
-  const weeklyData = [
-    { name: 'Mon', jobsApplied: 42, leadsGenerated: 12 },
-    { name: 'Tue', jobsApplied: 38, leadsGenerated: 15 },
-    { name: 'Wed', jobsApplied: 35, leadsGenerated: 10 },
-    { name: 'Thu', jobsApplied: 29, leadsGenerated: 8 },
-    { name: 'Fri', jobsApplied: 33, leadsGenerated: 9 },
-    { name: 'Sat', jobsApplied: 20, leadsGenerated: 5 },
-    { name: 'Sun', jobsApplied: 18, leadsGenerated: 4 },
-  ];
+  // Get data for weekly performance and profiles
+  const { data: progressUpdates = [] } = useQuery({ queryKey: ["/api/progress-updates"] });
+  const { data: leadEntries = [] } = useQuery({ queryKey: ["/api/lead-entries"] });
+  const { data: profiles = [] } = useQuery({ queryKey: ["/api/profiles"] });
   
-  // Profile distribution data
-  const profileData = [
-    { name: 'Software Engineer', value: 35 },
-    { name: 'UX Designer', value: 25 },
-    { name: 'Project Manager', value: 20 },
-    { name: 'Marketing Specialist', value: 15 },
-    { name: 'Data Analyst', value: 5 },
-  ];
+  // Get all profiles with assignments count
+  const { data: leadGenAssignments = [] } = useQuery({ queryKey: ["/api/lead-gen-assignments"] });
+  const { data: salesAssignments = [] } = useQuery({ queryKey: ["/api/sales-assignments"] });
   
-  const COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444'];
+  // Format weekly performance data
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ...
+  
+  // Adjust to start from Monday (0 = Monday in our array)
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - ((dayOfWeek || 7) - 1));
+  
+  // Create array of dates for the current week (Monday to Sunday)
+  const weekDates = days.map((day, index) => {
+    const date = new Date(startOfWeek);
+    date.setDate(startOfWeek.getDate() + index);
+    return date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+  });
+  
+  // Map progress and lead entries to each day
+  const weeklyData = weekDates.map((date, index) => {
+    // Filter progress updates for this date
+    const dayProgress = progressUpdates.filter((update: any) => 
+      update.date === date
+    );
+    
+    // Filter lead entries for this date
+    const dayLeads = leadEntries.filter((entry: any) => 
+      entry.date === date
+    );
+    
+    // Sum up jobs applied and leads generated
+    const jobsApplied = dayProgress.reduce((sum: number, update: any) => 
+      sum + update.jobsApplied, 0
+    );
+    
+    const leadsGenerated = dayLeads.reduce((sum: number, entry: any) => 
+      sum + entry.newLeads, 0
+    );
+    
+    return {
+      name: days[index],
+      jobsApplied,
+      leadsGenerated
+    };
+  });
+  
+  // Calculate profile distribution based on actual profiles
+  // Count how many assignments each profile has
+  const profileDistribution = profiles.map((profile: any) => {
+    const leadGenCount = leadGenAssignments.filter((a: any) => a.profileId === profile.id).length;
+    const salesCount = salesAssignments.filter((a: any) => a.profileId === profile.id).length;
+    const totalAssignments = leadGenCount + salesCount;
+    
+    return {
+      name: profile.name,
+      value: totalAssignments || 1 // Ensure at least 1 for display purposes
+    };
+  });
+  
+  const COLORS = ['#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444', '#EC4899', '#6366F1'];
   
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -149,17 +195,17 @@ function ManagerCharts() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={profileData}
+                  data={profileDistribution || []}
                   innerRadius={60}
                   outerRadius={80}
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {profileData.map((entry, index) => (
+                  {(profileDistribution || []).map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => `${value}%`} />
+                <Tooltip formatter={(value) => `${value}`} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
