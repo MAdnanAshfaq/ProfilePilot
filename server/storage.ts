@@ -762,7 +762,7 @@ export class DatabaseStorage implements IStorage {
         // Update existing assignment
         const result = await db.update(leadGenAssignments)
           .set({ profileId: assignment.profileId })
-          .where({ userId: assignment.userId })
+          .where(eq(leadGenAssignments.userId, assignment.userId))
           .returning();
         return result[0];
       }
@@ -818,10 +818,10 @@ export class DatabaseStorage implements IStorage {
       const existingAssignments = await db.select()
         .from(salesAssignments)
         .where(
-          eq(salesAssignments.userId, assignment.userId)
-        )
-        .where(
-          eq(salesAssignments.profileId, assignment.profileId)
+          and(
+            eq(salesAssignments.userId, assignment.userId),
+            eq(salesAssignments.profileId, assignment.profileId)
+          )
         )
         .limit(1);
       
@@ -913,21 +913,29 @@ export class DatabaseStorage implements IStorage {
   // Progress Update operations
   async getProgressUpdates(userId?: number, fromDate?: Date, toDate?: Date): Promise<ProgressUpdate[]> {
     try {
-      let query = db.select().from(progressUpdates);
+      let whereConditions = [];
       
       if (userId) {
-        query = query.where(eq(progressUpdates.userId, userId));
+        whereConditions.push(eq(progressUpdates.userId, userId));
       }
       
       if (fromDate) {
-        query = query.where(gte(progressUpdates.date, fromDate));
+        whereConditions.push(gte(progressUpdates.date, fromDate.toISOString().split('T')[0]));
       }
       
       if (toDate) {
-        query = query.where(lte(progressUpdates.date, toDate));
+        whereConditions.push(lte(progressUpdates.date, toDate.toISOString().split('T')[0]));
       }
       
-      return await query;
+      // Apply filters if any are present
+      if (whereConditions.length > 0) {
+        return await db.select()
+          .from(progressUpdates)
+          .where(and(...whereConditions));
+      }
+      
+      // Otherwise return all records
+      return await db.select().from(progressUpdates);
     } catch (error) {
       console.error('Error getting progress updates:', error);
       return [];
@@ -947,21 +955,29 @@ export class DatabaseStorage implements IStorage {
   // Lead Entry operations
   async getLeadEntries(userId?: number, fromDate?: Date, toDate?: Date): Promise<LeadEntry[]> {
     try {
-      let query = db.select().from(leadEntries);
+      let whereConditions = [];
       
       if (userId) {
-        query = query.where(eq(leadEntries.userId, userId));
+        whereConditions.push(eq(leadEntries.userId, userId));
       }
       
       if (fromDate) {
-        query = query.where(gte(leadEntries.date, fromDate));
+        whereConditions.push(gte(leadEntries.date, fromDate.toISOString().split('T')[0]));
       }
       
       if (toDate) {
-        query = query.where(lte(leadEntries.date, toDate));
+        whereConditions.push(lte(leadEntries.date, toDate.toISOString().split('T')[0]));
       }
       
-      return await query;
+      // Apply filters if any are present
+      if (whereConditions.length > 0) {
+        return await db.select()
+          .from(leadEntries)
+          .where(and(...whereConditions));
+      }
+      
+      // Otherwise return all records
+      return await db.select().from(leadEntries);
     } catch (error) {
       console.error('Error getting lead entries:', error);
       return [];

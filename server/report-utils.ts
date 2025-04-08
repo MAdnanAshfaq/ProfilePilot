@@ -12,7 +12,9 @@ import {
   WidthType,
   HeadingLevel,
   BorderStyle,
-  Packer
+  Packer,
+  SectionType,
+  UnderlineType
 } from 'docx';
 
 // Helper function to generate formatted dates for the report title
@@ -113,13 +115,19 @@ export async function generateWeeklySalesReport(fromDate: Date, toDate: Date): P
   // Format the date range for the report title
   const dateRange = formatReportDateRange(fromDate, toDate);
   
-  // Create document
+  // Create document with proper structure to avoid corruption
   const doc = new Document({
+    creator: "Resume Management System",
+    description: "Weekly Sales Report",
+    title: `Weekly Sales Report ${dateRange}`,
     sections: [{
-      properties: {},
+      properties: {
+        type: SectionType.CONTINUOUS
+      },
       children: [
-        // Title with th superscript
+        // Title 
         new Paragraph({
+          heading: HeadingLevel.HEADING_1,
           children: [
             new TextRun({
               text: "Total Fetching & Applies ",
@@ -149,6 +157,11 @@ export async function generateWeeklySalesReport(fromDate: Date, toDate: Date): P
             new TextRun({
               text: format(toDate, 'do'),
               bold: true, 
+              size: 32,
+            }),
+            new TextRun({
+              text: " ",
+              bold: true,
               size: 32,
             }),
             new TextRun({
@@ -544,10 +557,15 @@ export async function generateDailyReport(date: Date): Promise<Buffer> {
     userUpdates[update.userId].jobsApplied += update.jobsApplied;
   });
   
-  // Create document
+  // Create document with proper structure to avoid corruption
   const doc = new Document({
+    creator: "Resume Management System",
+    description: "Daily Performance Report",
+    title: `Daily Report ${formattedDate}`,
     sections: [{
-      properties: {},
+      properties: {
+        type: SectionType.CONTINUOUS
+      },
       children: [
         // Title
         new Paragraph({

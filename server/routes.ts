@@ -518,11 +518,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/profiles/:id/resume", isAuthenticated, async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const profile = await storage.getProfile(id);
-      
-      if (!profile || !profile.resumeBuffer) {
-        return res.status(404).json({ message: "Resume not found" });
-      }
       
       // Check if user is authorized to download this resume
       const user = req.user!;
@@ -542,12 +537,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You don't have permission to access this resume" });
       }
       
-      // Send the PDF file
-      const buffer = base64ToBuffer(profile.resumeBuffer);
-      const fileName = profile.resumeFileName || `resume-${id}.pdf`;
+      // Get the resume content and filename using the storage API
+      const resumeData = await storage.getProfileResume(id);
+      
+      if (!resumeData) {
+        return res.status(404).json({ message: "Resume not found" });
+      }
+      
+      const { content, filename } = resumeData;
+      
+      // Convert content to PDF format - for simplicity we'll create a simple HTML and convert it to bytes
+      const pdfContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${filename}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 40px; }
+          h1 { color: #333; }
+          .content { white-space: pre-line; }
+        </style>
+      </head>
+      <body>
+        <h1>${filename}</h1>
+        <div class="content">${content}</div>
+      </body>
+      </html>`;
+      
+      // Convert to buffer
+      const buffer = Buffer.from(pdfContent, 'utf-8');
       
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(buffer);
     } catch (error) {
       console.error('Error downloading resume:', error);
