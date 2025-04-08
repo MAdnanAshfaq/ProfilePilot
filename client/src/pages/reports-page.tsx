@@ -59,21 +59,45 @@ export default function ReportsPage() {
   
   // Function to download a report
   const downloadReport = (reportType: string, fileFormat: 'csv' | 'pdf') => {
+    // Format dates for query parameters
+    const fromDateStr = format(dateRange.from, 'yyyy-MM-dd');
+    const toDateStr = format(dateRange.to, 'yyyy-MM-dd');
+    
+    // Handle different report types
     if (reportType === 'team-performance') {
-      // Direct download using window.location
-      window.location.href = `/api/reports/team-performance?fromDate=${format(dateRange.from, 'yyyy-MM-dd')}&toDate=${format(dateRange.to, 'yyyy-MM-dd')}`;
+      window.location.href = `/api/reports/team-performance?fromDate=${fromDateStr}&toDate=${toDateStr}`;
       
       toast({
         title: "Report Downloaded",
-        description: `Team Performance report downloaded in ${fileFormat.toUpperCase()} format.`,
+        description: `Team Performance report downloaded in CSV format.`,
       });
     } else if (reportType === 'lead-entries') {
-      // Direct download using window.location
-      window.location.href = `/api/reports/lead-entries?fromDate=${format(dateRange.from, 'yyyy-MM-dd')}&toDate=${format(dateRange.to, 'yyyy-MM-dd')}`;
+      window.location.href = `/api/reports/lead-entries?fromDate=${fromDateStr}&toDate=${toDateStr}`;
       
       toast({
         title: "Report Downloaded",
-        description: `Lead Entries report downloaded in ${fileFormat.toUpperCase()} format.`,
+        description: `Lead Entries report downloaded in CSV format.`,
+      });
+    } else if (reportType === 'weekly-sales') {
+      window.location.href = `/api/reports/weekly-sales?fromDate=${fromDateStr}&toDate=${toDateStr}`;
+      
+      toast({
+        title: "Report Downloaded",
+        description: `Weekly Sales report downloaded in the exact format.`,
+      });
+    } else if (reportType === 'daily') {
+      // For daily report, just use the 'from' date
+      window.location.href = `/api/reports/daily?date=${fromDateStr}`;
+      
+      toast({
+        title: "Report Downloaded",
+        description: `Daily report downloaded for ${format(dateRange.from, 'MMMM do, yyyy')}.`,
+      });
+    } else {
+      toast({
+        title: "Report type not supported",
+        description: "This report type is not yet implemented.",
+        variant: "destructive"
       });
     }
   };
@@ -126,7 +150,7 @@ export default function ReportsPage() {
     }
   ];
   
-  // Mock report templates
+  // Report templates
   const reportTemplates = [
     {
       id: 'team-performance',
@@ -141,10 +165,16 @@ export default function ReportsPage() {
       icon: <Users className="text-green-500" />
     },
     {
-      id: 'profile-efficiency',
-      title: 'Profile Efficiency',
-      description: 'Job application to lead conversion analysis',
-      icon: <BarChart2 className="text-purple-500" />
+      id: 'weekly-sales',
+      title: 'Weekly Sales Report',
+      description: 'Weekly sales report in the exact required format',
+      icon: <BarChart2 className="text-blue-500" />
+    },
+    {
+      id: 'daily',
+      title: 'Daily Report',
+      description: 'Daily performance report across all profiles',
+      icon: <Calendar className="text-purple-500" />
     }
   ];
   

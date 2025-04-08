@@ -7,6 +7,7 @@ import { insertProfileSchema, insertLeadGenAssignmentSchema, insertSalesAssignme
 import multer from "multer";
 import path from "path";
 import { parsePdfBuffer, bufferToBase64, base64ToBuffer } from "./pdf-utils";
+import { generateWeeklySalesReport, generateDailyReport, formatReportDateRange } from './report-utils';
 
 // We don't need to define multer types as they are already defined in types/multer
 
@@ -537,47 +538,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Report Generation (CSV)
-  app.get("/api/reports/team-performance", hasRole(["manager"]), async (req, res) => {
-    try {
-      const fromDate = req.query.fromDate ? new Date(req.query.fromDate as string) : undefined;
-      const toDate = req.query.toDate ? new Date(req.query.toDate as string) : undefined;
-      
-      const performanceData = await storage.getTeamPerformanceData(fromDate, toDate);
-      
-      // Format for CSV
-      const headers = ['Name', 'Profile', 'Target (Fetch)', 'Target (Apply)', 'Jobs Fetched', 'Jobs Applied', 'Completion (%)'];
-      const rows = performanceData.map(data => [
-        data.name,
-        data.profile,
-        data.targetJobsToFetch,
-        data.targetJobsToApply,
-        data.jobsFetched,
-        data.jobsApplied,
-        `${data.completion}%`
-      ]);
-      
-      // Create CSV content
-      let csv = headers.join(',') + '\n';
-      rows.forEach(row => {
-        csv += row.join(',') + '\n';
-      });
-      
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename=team-performance.csv');
-      
-      res.send(csv);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to generate report" });
+  // Report utility functions now imported at the top
+
+// Report Generation
+app.get("/api/reports/team-performance", hasRole(["manager"]), async (req, res) => {
+  try {
+    const fromDate = req.query.fromDate ? new Date(req.query.fromDate as string) : undefined;
+    const toDate = req.query.toDate ? new Date(req.query.toDate as string) : undefined;
+    
+    if (!fromDate || !toDate) {
+      return res.status(400).json({ message: "From date and to date are required" });
     }
-  });
-  
-  app.get("/api/reports/lead-entries", hasRole(["manager"]), async (req, res) => {
-    try {
-      const fromDate = req.query.fromDate ? new Date(req.query.fromDate as string) : undefined;
-      const toDate = req.query.toDate ? new Date(req.query.toDate as string) : undefined;
-      
-      const entries = await storage.getLeadEntries(undefined, fromDate, toDate);
+    
+    const performanceData = await storage.getTeamPerformanceData(fromDate, toDate);
+    
+    // Format for CSV
+    const headers = ['Name', 'Profile', 'Target (Fetch)', 'Target (Apply)', 'Jobs Fetched', 'Jobs Applied', 'Completion (%)'];
+    const rows = performanceData.map(data => [
+      data.name,
+      data.profile,
+      data.targetJobsToFetch,
+      data.targetJobsToApply,
+      data.jobsFetched,
+      data.jobsApplied,
+      `${data.completion}%`
+    ]);
+    
+    // Create CSV content
+    let csv = headers.join(',') + '\n';
+    rows.forEach(row => {
+      csv += row.join(',') + '\n';
+    });
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=team-performance.csv');
+    
+    res.send(csv);
+  } catch (error) {
+    console.error('Error generating CSV report:', error);
+    res.status(500).json({ message: "Failed to generate report" });
+  }
+});
+
+// Weekly Sales Report - formatted exactly like the sample docx
+app.get("/api/reports/weekly-sales", hasRole(["manager"]), async (req, res) => {
+  try {
+    const fromDate = req.query.fromDate ? new Date(req.query.fromDate as string) : undefined;
+    const toDate = req.query.toDate ? new Date(req.query.toDate as string) : undefined;
+    
+    if (!fromDate || !toDate) {
+      return res.status(400).json({ message: "From date and to date are required" });
+    }
+    
+    const reportText = await generateWeeklySalesReport(fromDate, toDate);
+    const dateRange = formatReportDateRange(fromDate, toDate);
+    
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="Weekly Report Sales(${dateRange}).txt"`);
+    
+    res.send(reportText);
+  } catch (error) {
+    console.error('Error generating weekly sales report:', error);
+    res.status(500).json({ message: "Failed to generate weekly sales report" });
+  }
+});
+
+// Daily Report
+app.get("/api/reports/daily", hasRole(["manager"]), async (req, res) => {
+  try {
+    const date = req.query.date ? new Date(req.query.date as string) : new Date();
+    
+    const reportText = await generateDailyReport(date);
+    const formattedDate = date.toISOString().split('T')[0];
+    
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="Daily Report ${formattedDate}.txt"`);
+    
+    res.send(reportText);
+  } catch (error) {
+    console.error('Error generating daily report:', error);
+    res.status(500).json({ message: "Failed to generate daily report" });
+  }
+});
+
+app.get("/api/reports/lead-entries", hasRole(["manager"]), async (req, res) => {
+  try {
+    const fromDate = req.query.fromDate ? new Date(req.query.fromDate as string) : undefined;
+    const toDate = req.query.toDate ? new Date(req.query.toDate as string) : undefined;
+    
+    const entries = await storage.getLeadEntries(undefined, fromDate, toDate);
       
       // Expand the entry data
       const expandedEntries = await Promise.all(
