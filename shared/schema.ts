@@ -12,13 +12,23 @@ export const users = pgTable("users", {
   role: text("role", { enum: ["manager", "lead_gen", "sales"] }).notNull(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  name: true,
-  email: true,
-  role: true,
-});
+export const insertUserSchema = createInsertSchema(users)
+  .pick({
+    username: true,
+    password: true,
+    name: true,
+    email: true,
+    role: true,
+  })
+  .extend({
+    username: z.string().min(3, "Username must be at least 3 characters"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    name: z.string().min(2, "Name must be at least 2 characters"),
+    email: z.string().email("Please enter a valid email address"),
+    role: z.enum(["manager", "lead_gen", "sales"], {
+      errorMap: () => ({ message: "Please select a valid role" })
+    })
+  });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;

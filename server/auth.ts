@@ -87,24 +87,45 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Registration route
+  // Registration route with enhanced validation
   app.post("/api/register", async (req, res, next) => {
     try {
+      console.log("Registration request:", { ...req.body, password: "[REDACTED]" });
+      
+      // Check for required fields
+      if (!req.body.username || !req.body.password || !req.body.name || !req.body.email || !req.body.role) {
+        return res.status(400).json({ message: "All fields are required" });
+      }
+      
+      // Check if user already exists
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
-        return res.status(400).send("Username already exists");
+        return res.status(400).json({ message: "Username already exists" });
       }
 
-      const user = await storage.createUser({
+      // Hash password and create user
+      const hashedPassword = await hashPassword(req.body.password);
+      
+      const userData = {
         ...req.body,
-        password: await hashPassword(req.body.password),
-      });
+        password: hashedPassword,
+      };
+      
+      console.log("Creating user:", { ...userData, password: "[REDACTED]" });
+      
+      const user = await storage.createUser(userData);
+      console.log("User created successfully:", { id: user.id, username: user.username });
 
+      // Log user in automatically
       req.login(user, (err) => {
-        if (err) return next(err);
+        if (err) {
+          console.error("Error logging in after registration:", err);
+          return next(err);
+        }
         res.status(201).json(user);
       });
     } catch (err) {
+      console.error("Registration error:", err);
       next(err);
     }
   });
