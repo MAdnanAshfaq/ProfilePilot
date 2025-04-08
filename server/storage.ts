@@ -650,10 +650,22 @@ export class DatabaseStorage implements IStorage {
 
   async createProfile(profile: InsertProfile): Promise<Profile> {
     try {
+      // Handle null bytes and invalid UTF-8 characters in profile data
+      // PostgreSQL cannot store null bytes in text fields
+      const sanitizedProfile = { ...profile };
+      
+      // Sanitize text fields to ensure they're valid UTF-8
+      if (sanitizedProfile.resumeContent) {
+        sanitizedProfile.resumeContent = sanitizedProfile.resumeContent
+          .replace(/\0/g, '') // Remove null bytes
+          .replace(/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/g, ''); // Remove control characters
+      }
+      
       const result = await db.insert(profiles).values({
-        ...profile,
+        ...sanitizedProfile,
         createdAt: new Date(),
       }).returning();
+      
       return result[0];
     } catch (error) {
       console.error('Error creating profile:', error);
@@ -663,7 +675,16 @@ export class DatabaseStorage implements IStorage {
 
   async updateProfile(id: number, updatedFields: Partial<InsertProfile>): Promise<Profile | undefined> {
     try {
-      const result = await db.update(profiles).set(updatedFields).where(eq(profiles.id, id)).returning();
+      // Sanitize text fields to ensure they're valid UTF-8
+      const sanitizedFields = { ...updatedFields };
+      
+      if (sanitizedFields.resumeContent) {
+        sanitizedFields.resumeContent = sanitizedFields.resumeContent
+          .replace(/\0/g, '') // Remove null bytes
+          .replace(/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/g, ''); // Remove control characters
+      }
+      
+      const result = await db.update(profiles).set(sanitizedFields).where(eq(profiles.id, id)).returning();
       return result[0];
     } catch (error) {
       console.error('Error updating profile:', error);
@@ -695,11 +716,12 @@ export class DatabaseStorage implements IStorage {
         .where(eq(leadEntries.profileId, id));
       
       // If profile is in use, don't delete
-      if (leadGenAssignmentCount[0].count > 0 || 
-          salesAssignmentCount[0].count > 0 || 
-          targetCount[0].count > 0 || 
-          progressUpdateCount[0].count > 0 || 
-          leadEntryCount[0].count > 0) {
+      // Check if count is greater than 0 for any of these tables
+      if ((leadGenAssignmentCount[0]?.count?.count || 0) > 0 || 
+          (salesAssignmentCount[0]?.count?.count || 0) > 0 || 
+          (targetCount[0]?.count?.count || 0) > 0 || 
+          (progressUpdateCount[0]?.count?.count || 0) > 0 || 
+          (leadEntryCount[0]?.count?.count || 0) > 0) {
         return false;
       }
       
