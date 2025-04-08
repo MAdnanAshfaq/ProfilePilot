@@ -1,0 +1,142 @@
+import { pgTable, text, serial, integer, boolean, date, timestamp } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+
+// User model and schema
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  role: text("role", { enum: ["manager", "lead_gen", "sales"] }).notNull(),
+});
+
+export const insertUserSchema = createInsertSchema(users).pick({
+  username: true,
+  password: true,
+  name: true,
+  email: true,
+  role: true,
+});
+
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
+
+// Profile model and schema
+export const profiles = pgTable("profiles", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+});
+
+export const insertProfileSchema = createInsertSchema(profiles).pick({
+  name: true,
+  description: true,
+});
+
+export type InsertProfile = z.infer<typeof insertProfileSchema>;
+export type Profile = typeof profiles.$inferSelect;
+
+// Profile Assignment model and schema for Lead Generation Team
+export const leadGenAssignments = pgTable("lead_gen_assignments", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  profileId: integer("profile_id").notNull().references(() => profiles.id),
+});
+
+export const insertLeadGenAssignmentSchema = createInsertSchema(leadGenAssignments).pick({
+  userId: true,
+  profileId: true,
+});
+
+export type InsertLeadGenAssignment = z.infer<typeof insertLeadGenAssignmentSchema>;
+export type LeadGenAssignment = typeof leadGenAssignments.$inferSelect;
+
+// Profile Assignment model and schema for Sales Coordinators
+export const salesAssignments = pgTable("sales_assignments", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  profileId: integer("profile_id").notNull().references(() => profiles.id),
+});
+
+export const insertSalesAssignmentSchema = createInsertSchema(salesAssignments).pick({
+  userId: true,
+  profileId: true,
+});
+
+export type InsertSalesAssignment = z.infer<typeof insertSalesAssignmentSchema>;
+export type SalesAssignment = typeof salesAssignments.$inferSelect;
+
+// Targets model and schema
+export const targets = pgTable("targets", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  profileId: integer("profile_id").notNull().references(() => profiles.id),
+  jobsToFetch: integer("jobs_to_fetch").notNull(),
+  jobsToApply: integer("jobs_to_apply").notNull(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  isWeekly: boolean("is_weekly").notNull(),
+});
+
+export const insertTargetSchema = createInsertSchema(targets).pick({
+  userId: true,
+  profileId: true,
+  jobsToFetch: true,
+  jobsToApply: true,
+  startDate: true,
+  endDate: true,
+  isWeekly: true,
+});
+
+export type InsertTarget = z.infer<typeof insertTargetSchema>;
+export type Target = typeof targets.$inferSelect;
+
+// Progress model and schema for Lead Generation Team
+export const progressUpdates = pgTable("progress_updates", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  profileId: integer("profile_id").notNull().references(() => profiles.id),
+  date: date("date").notNull(),
+  jobsFetched: integer("jobs_fetched").notNull(),
+  jobsApplied: integer("jobs_applied").notNull(),
+  notes: text("notes"),
+});
+
+export const insertProgressUpdateSchema = createInsertSchema(progressUpdates).pick({
+  userId: true,
+  profileId: true,
+  date: true,
+  jobsFetched: true,
+  jobsApplied: true,
+  notes: true,
+});
+
+export type InsertProgressUpdate = z.infer<typeof insertProgressUpdateSchema>;
+export type ProgressUpdate = typeof progressUpdates.$inferSelect;
+
+// Lead Entry model and schema for Sales Coordinators
+export const leadEntries = pgTable("lead_entries", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  profileId: integer("profile_id").notNull().references(() => profiles.id),
+  date: date("date").notNull(),
+  newLeads: integer("new_leads").notNull(),
+  clientRejections: integer("client_rejections").notNull(),
+  teamRejections: integer("team_rejections").notNull(),
+  notes: text("notes"),
+});
+
+export const insertLeadEntrySchema = createInsertSchema(leadEntries).pick({
+  userId: true,
+  profileId: true,
+  date: true,
+  newLeads: true,
+  clientRejections: true,
+  teamRejections: true,
+  notes: true,
+});
+
+export type InsertLeadEntry = z.infer<typeof insertLeadEntrySchema>;
+export type LeadEntry = typeof leadEntries.$inferSelect;
