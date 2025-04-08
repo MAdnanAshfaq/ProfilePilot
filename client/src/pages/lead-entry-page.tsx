@@ -19,10 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import { DataTable } from "@/components/ui/data-table";
 import { ColumnDef } from "@tanstack/react-table";
-import { Edit } from "lucide-react";
+import { Calendar, Edit } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +30,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 
 // Lead entry validation schema
 const leadEntrySchema = z.object({
@@ -52,6 +54,7 @@ export default function LeadEntryPage() {
   const { toast } = useToast();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<any>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   
   // Form handling
   const form = useForm<LeadEntryFormData>({
@@ -90,12 +93,12 @@ export default function LeadEntryPage() {
   // Create a new lead entry
   const createLeadEntryMutation = useMutation({
     mutationFn: async (data: LeadEntryFormData) => {
-      // Current date in YYYY-MM-DD format
-      const today = format(new Date(), "yyyy-MM-dd");
+      // Format selected date to YYYY-MM-DD format
+      const formattedDate = format(selectedDate, "yyyy-MM-dd");
       
       return apiRequest("POST", "/api/lead-entries", {
         profileId: parseInt(data.profileId),
-        date: today,
+        date: formattedDate,
         newLeads: parseInt(data.newLeads),
         clientRejections: parseInt(data.clientRejections),
         teamRejections: parseInt(data.teamRejections),
@@ -208,39 +211,11 @@ export default function LeadEntryPage() {
   
   // Form submission handler
   const onSubmit = (data: LeadEntryFormData) => {
-    // Ensure rejections are not greater than new leads
-    const newLeads = parseInt(data.newLeads);
-    const clientRejections = parseInt(data.clientRejections);
-    const teamRejections = parseInt(data.teamRejections);
-    
-    if (clientRejections + teamRejections > newLeads) {
-      toast({
-        title: "Invalid input",
-        description: "Total rejections cannot be greater than new leads.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
     createLeadEntryMutation.mutate(data);
   };
   
   // Edit form submission handler
-  const onEditSubmit = (data: LeadEntryFormData) => {
-    // Ensure rejections are not greater than new leads
-    const newLeads = parseInt(data.newLeads);
-    const clientRejections = parseInt(data.clientRejections);
-    const teamRejections = parseInt(data.teamRejections);
-    
-    if (clientRejections + teamRejections > newLeads) {
-      toast({
-        title: "Invalid input",
-        description: "Total rejections cannot be greater than new leads.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
+  const onEditSubmit = (data: LeadEntryFormData) => {    
     updateLeadEntryMutation.mutate({
       id: editingEntry.id,
       data
@@ -334,7 +309,25 @@ export default function LeadEntryPage() {
       
       <Card className="bg-white shadow mb-8">
         <CardContent className="p-6">
-          <h3 className="font-medium mb-6">Enter Today's Leads</h3>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="font-medium">Enter Lead Data for {format(selectedDate, "MMMM d, yyyy")}</h3>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Select Date
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <CalendarComponent
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => date && setSelectedDate(date)}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
           
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <div className="space-y-6">

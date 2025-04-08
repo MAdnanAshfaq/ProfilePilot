@@ -1081,18 +1081,22 @@ export class DatabaseStorage implements IStorage {
       // Get all lead entries for the date range
       const leadData = await this.getLeadEntries(undefined, fromDate, toDate);
       
-      // Group data by user
-      const userPerformance: Record<number, any> = {};
+      // Group data by user and profile
+      const userPerformance: Record<string, any> = {};
       
-      // Process progress updates
+      // Process progress updates - grouped by profile and user
       for (const update of progressData) {
-        if (!userPerformance[update.userId]) {
+        const key = `${update.userId}-${update.profileId}`;
+        if (!userPerformance[key]) {
           const user = await this.getUser(update.userId);
-          userPerformance[update.userId] = {
+          const profile = await this.getProfile(update.profileId);
+          userPerformance[key] = {
             userId: update.userId,
+            profileId: update.profileId,
             name: user?.name || 'Unknown',
             email: user?.email || '',
             role: user?.role || '',
+            profile: profile?.name || 'Unknown',
             jobsFetched: 0,
             jobsApplied: 0,
             newLeads: 0,
@@ -1101,19 +1105,23 @@ export class DatabaseStorage implements IStorage {
           };
         }
         
-        userPerformance[update.userId].jobsFetched += update.jobsFetched;
-        userPerformance[update.userId].jobsApplied += update.jobsApplied;
+        userPerformance[key].jobsFetched += update.jobsFetched;
+        userPerformance[key].jobsApplied += update.jobsApplied;
       }
       
-      // Process lead entries
+      // Process lead entries - also grouped by profile and user
       for (const entry of leadData) {
-        if (!userPerformance[entry.userId]) {
+        const key = `${entry.userId}-${entry.profileId}`;
+        if (!userPerformance[key]) {
           const user = await this.getUser(entry.userId);
-          userPerformance[entry.userId] = {
+          const profile = await this.getProfile(entry.profileId);
+          userPerformance[key] = {
             userId: entry.userId,
+            profileId: entry.profileId,
             name: user?.name || 'Unknown',
             email: user?.email || '',
             role: user?.role || '',
+            profile: profile?.name || 'Unknown',
             jobsFetched: 0,
             jobsApplied: 0,
             newLeads: 0,
@@ -1122,9 +1130,9 @@ export class DatabaseStorage implements IStorage {
           };
         }
         
-        userPerformance[entry.userId].newLeads += entry.newLeads;
-        userPerformance[entry.userId].clientRejections += entry.clientRejections;
-        userPerformance[entry.userId].teamRejections += entry.teamRejections;
+        userPerformance[key].newLeads += entry.newLeads;
+        userPerformance[key].clientRejections += entry.clientRejections;
+        userPerformance[key].teamRejections += entry.teamRejections;
       }
       
       return Object.values(userPerformance);

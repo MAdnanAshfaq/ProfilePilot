@@ -1,3 +1,4 @@
+import React from "react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -221,6 +222,32 @@ function ManagerTeamTable() {
     queryKey: ["/api/team-performance"],
   });
   
+  const { data: targets = [] } = useQuery({
+    queryKey: ["/api/targets"],
+  });
+  
+  // Process data to add target and completion information
+  const processedData = React.useMemo(() => {
+    if (!teamPerformance || !targets) return [];
+    
+    return teamPerformance.map((item: any) => {
+      // Find matching target for this profile
+      const target = targets.find((t: any) => t.profileId === item.profileId);
+      const targetJobs = target ? target.jobsToApply : 0;
+      
+      // Calculate completion percentage
+      const completion = targetJobs > 0
+        ? Math.min(100, Math.round((item.jobsApplied / targetJobs) * 100))
+        : 0;
+      
+      return {
+        ...item,
+        targetJobsToApply: targetJobs,
+        completion
+      };
+    });
+  }, [teamPerformance, targets]);
+  
   const columns: ColumnDef<any>[] = [
     {
       accessorKey: "name",
@@ -273,7 +300,7 @@ function ManagerTeamTable() {
         </div>
         <DataTable 
           columns={columns} 
-          data={teamPerformance || []} 
+          data={processedData || []} 
         />
       </CardContent>
     </Card>
