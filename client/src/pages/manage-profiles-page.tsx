@@ -30,7 +30,9 @@ import { format } from "date-fns";
 const profileSchema = z.object({
   name: z.string().min(1, "Profile name is required"),
   description: z.string().min(5, "Description must be at least 5 characters"),
-  resumeContent: z.string().min(10, "Resume content is required and must be detailed")
+  resumeContent: z.string().min(10, "Resume content is required and must be detailed").transform(value => 
+    value.trim() === "" ? null : value
+  )
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -133,6 +135,16 @@ export default function ManageProfilesPage() {
 
   // Handle form submissions
   const onSubmitProfile = (data: ProfileFormData) => {
+    // Ensure resume content is not empty
+    if (!data.resumeContent || data.resumeContent.trim() === "") {
+      toast({
+        title: "Resume content required",
+        description: "Please enter resume content before submitting",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     if (selectedProfileId) {
       updateProfileMutation.mutate({ id: selectedProfileId, data });
     } else {

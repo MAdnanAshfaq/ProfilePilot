@@ -33,12 +33,16 @@ export const profiles = pgTable("profiles", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertProfileSchema = createInsertSchema(profiles).pick({
-  name: true,
-  description: true,
-  resumeContent: true,
-  createdBy: true,
-});
+export const insertProfileSchema = createInsertSchema(profiles)
+  .pick({
+    name: true,
+    description: true,
+    resumeContent: true,
+    createdBy: true,
+  })
+  .extend({
+    resumeContent: z.string().min(1, "Resume content is required")
+  });
 
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
 export type Profile = typeof profiles.$inferSelect;
