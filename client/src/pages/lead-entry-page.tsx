@@ -304,12 +304,32 @@ export default function LeadEntryPage() {
     );
   }
   
+  // Get targets for the selected profile
+  const { data: targets } = useQuery({
+    queryKey: ["/api/targets"],
+    enabled: !!myProfiles && myProfiles.length > 0,
+  });
+
+  // Get target info for a selected profile
+  const getTargetInfoForProfile = (profileId: string) => {
+    if (!targets || !profileId) return null;
+    return targets.find((t: any) => t.profileId.toString() === profileId);
+  };
+
+  const selectedTarget = form.watch("profileId") ? getTargetInfoForProfile(form.watch("profileId")) : null;
+
   return (
     <DashboardLayout title="Lead Entry">
       <div className="flex justify-between items-center mb-6">
         <div className="text-sm text-neutral-medium">
           Today: {format(new Date(), "MMMM d, yyyy")}
         </div>
+        
+        {selectedTarget && (
+          <div className="px-3 py-1 bg-primary bg-opacity-10 text-primary rounded-full text-sm">
+            {selectedTarget.isWeekly ? "Weekly Target" : "Daily Target"}
+          </div>
+        )}
       </div>
       
       <Card className="bg-white shadow mb-8">
