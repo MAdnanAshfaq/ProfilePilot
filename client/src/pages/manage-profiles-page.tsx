@@ -580,28 +580,82 @@ export default function ManageProfilesPage() {
             <div className="p-6 bg-white border-b">
               <div className="prose prose-sm max-w-none">
                 {resumeToView && resumeToView.split('\n').map((line, index) => {
-                  // Check if line is a header (name or title)
-                  if (index < 2) {
-                    return <h3 key={index} className="font-bold text-lg mb-1">{line}</h3>
+                  // Detect technical skills to highlight
+                  const techSkills = [
+                    'JavaScript', 'JS', 'TypeScript', 'React', 'Vue', 'Angular', 'Node', 
+                    'Express', 'MongoDB', 'SQL', 'PostgreSQL', 'MySQL', 'Python', 'Java', 
+                    'C#', 'PHP', 'Ruby', 'HTML', 'CSS', 'SASS', 'SCSS', 'jQuery', 'Redux', 
+                    'GraphQL', 'REST', 'API', 'AWS', 'Azure', 'Docker', 'Kubernetes', 'Git',
+                    'GitHub', 'GitLab', 'CI/CD', 'DevOps'
+                  ];
+                  
+                  // Function to highlight tech skills in a line
+                  const highlightTechSkills = (text: string) => {
+                    let result = text;
+                    techSkills.forEach(skill => {
+                      // Use word boundary to match whole words only
+                      const regex = new RegExp(`\\b${skill}\\b`, 'gi');
+                      result = result.replace(regex, match => 
+                        `<span class="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded-md text-xs font-medium">${match}</span>`
+                      );
+                    });
+                    return result;
+                  };
+                  
+                  // Check if line is a header (name)
+                  if (index === 0) {
+                    return <h2 key={index} className="font-bold text-2xl text-gray-800 mb-1">{line}</h2>
                   }
                   
-                  // Check if line is a section header 
-                  if (line.endsWith(':')) {
-                    return <h4 key={index} className="font-bold text-base mt-4 mb-2">{line}</h4>
+                  // Check if line is a job title
+                  if (index === 1) {
+                    return <h3 key={index} className="font-semibold text-lg text-gray-700 mb-3">{line}</h3>
+                  }
+                  
+                  // Check if line contains contact info
+                  if (line.includes('@') || line.includes('LinkedIn') || line.includes('Phone')) {
+                    return <p key={index} className="text-sm text-gray-600 mb-4">{line}</p>
+                  }
+                  
+                  // Check if line is a section header (like EXPERIENCE, EDUCATION, etc.)
+                  if (line.trim().toUpperCase() === line.trim() && line.trim().length > 0) {
+                    return <h4 key={index} className="font-bold text-lg text-gray-800 mt-6 mb-3 border-b pb-1">{line}</h4>
+                  }
+                  
+                  // Check if line is a company/position header
+                  if (line.includes('/')) {
+                    const parts = line.split('/');
+                    return (
+                      <div key={index} className="mt-4 mb-2">
+                        <p className="font-semibold text-base">{parts[0].trim()}</p>
+                        <p className="text-sm text-gray-600">{parts[1].trim()}</p>
+                      </div>
+                    );
+                  }
+                  
+                  // Check if line contains dates
+                  if (/\d{1,2}\/\d{1,2}\/\d{2,4}/.test(line)) {
+                    return <p key={index} className="text-sm italic text-gray-600 mb-2">{line}</p>
                   }
                   
                   // Check if line is a bullet point
-                  if (line.trim().startsWith('-')) {
+                  if (line.trim().startsWith('-') || line.trim().startsWith('•')) {
                     return (
-                      <div key={index} className="flex ml-2 my-1">
-                        <span className="mr-2">•</span>
-                        <span>{line.trim().substring(1).trim()}</span>
+                      <div key={index} className="flex ml-2 my-1.5">
+                        <span className="mr-2 text-gray-500">•</span>
+                        <span dangerouslySetInnerHTML={{ __html: highlightTechSkills(line.trim().substring(1).trim()) }} />
                       </div>
                     )
                   }
                   
-                  // Regular line
-                  return <p key={index} className={line.trim() === '' ? 'my-3' : 'my-1'}>{line}</p>
+                  // Regular line with tech skills highlighted
+                  return (
+                    <p 
+                      key={index} 
+                      className={line.trim() === '' ? 'my-3' : 'my-1.5'}
+                      dangerouslySetInnerHTML={{ __html: highlightTechSkills(line) }}
+                    />
+                  )
                 })}
               </div>
             </div>
@@ -611,11 +665,11 @@ export default function ManageProfilesPage() {
             <Button 
               type="button" 
               variant="outline"
-              onClick={() => window.print()}
+              onClick={() => handleDownloadResume({id: selectedProfileId})}
               className="flex items-center"
             >
-              <FileText className="h-4 w-4 mr-2" />
-              Print Resume
+              <Download className="h-4 w-4 mr-2" />
+              Download Original PDF
             </Button>
             <Button 
               type="button" 
