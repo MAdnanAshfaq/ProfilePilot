@@ -8,13 +8,15 @@ import multer from "multer";
 import path from "path";
 import { parsePdfBuffer, bufferToBase64, base64ToBuffer } from "./pdf-utils";
 
+// We don't need to define multer types as they are already defined in types/multer
+
 // Configure multer for PDF file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB limit
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (req: Request, file: any, cb: any) => {
     const extname = path.extname(file.originalname).toLowerCase();
     if (extname !== '.pdf') {
       return cb(new Error('Only PDF files are allowed'));
@@ -146,8 +148,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const role = req.query.role as string | undefined;
       const users = await storage.getUsers(role);
+      console.log(`Fetching users with role ${role || 'all'}:`, users);
       res.json(users);
     } catch (error) {
+      console.error('Error fetching users:', error);
       res.status(500).json({ message: "Failed to fetch users" });
     }
   });

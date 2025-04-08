@@ -1,8 +1,12 @@
 import { users, type User, type InsertUser, profiles, type Profile, type InsertProfile, leadGenAssignments, type LeadGenAssignment, type InsertLeadGenAssignment, salesAssignments, type SalesAssignment, type InsertSalesAssignment, targets, type Target, type InsertTarget, progressUpdates, type ProgressUpdate, type InsertProgressUpdate, leadEntries, type LeadEntry, type InsertLeadEntry } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import { z } from "zod";
 
 const MemoryStore = createMemoryStore(session);
+
+// Define the user role type for strong typing
+type UserRole = "manager" | "lead_gen" | "sales";
 
 // Define a generic session store type for simplicity
 type SessionStore = any;
@@ -13,7 +17,7 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  getUsers(role?: string): Promise<User[]>;
+  getUsers(role?: UserRole | string): Promise<User[]>;
   
   // Profile operations
   getProfile(id: number): Promise<Profile | undefined>;
@@ -97,8 +101,63 @@ export class MemStorage implements IStorage {
       checkPeriod: 86400000,
     });
     
-    // Initialize with default profiles
+    // Initialize with default data
+    this.initializeDefaultUsers();
     this.initializeDefaultProfiles();
+  }
+
+  private async initializeDefaultUsers() {
+    // Create default users if they don't exist
+    const defaultUsers: {
+      username: string;
+      password: string;
+      name: string;
+      email: string;
+      role: "manager" | "lead_gen" | "sales";
+    }[] = [
+      {
+        username: "manager",
+        password: "password123", // In production this would be hashed
+        name: "Manager User",
+        email: "manager@example.com",
+        role: "manager"
+      },
+      {
+        username: "leadgen1",
+        password: "password123",
+        name: "Lead Gen User 1",
+        email: "leadgen1@example.com",
+        role: "lead_gen"
+      },
+      {
+        username: "leadgen2",
+        password: "password123",
+        name: "Lead Gen User 2",
+        email: "leadgen2@example.com",
+        role: "lead_gen"
+      },
+      {
+        username: "sales1",
+        password: "password123",
+        name: "Sales User 1",
+        email: "sales1@example.com",
+        role: "sales"
+      },
+      {
+        username: "sales2",
+        password: "password123",
+        name: "Sales User 2",
+        email: "sales2@example.com",
+        role: "sales"
+      }
+    ];
+
+    for (const user of defaultUsers) {
+      const existingUser = await this.getUserByUsername(user.username);
+      if (!existingUser) {
+        await this.createUser(user);
+      }
+    }
   }
   
   private async initializeDefaultProfiles() {
@@ -153,10 +212,11 @@ export class MemStorage implements IStorage {
     return user;
   }
   
-  async getUsers(role?: string): Promise<User[]> {
+  async getUsers(role?: UserRole | string): Promise<User[]> {
     const users = Array.from(this.users.values());
     if (role) {
-      return users.filter(user => user.role === role);
+      // Cast the role to a valid user role
+      return users.filter(user => user.role === role as UserRole);
     }
     return users;
   }
@@ -393,7 +453,7 @@ export class MemStorage implements IStorage {
     const user = await this.getUser(userId);
     if (!user) return undefined;
     
-    if (user.role === 'lead_gen') {
+    if (user.role === 'lead_gen' as UserRole) {
       const assignment = await this.getLeadGenAssignment(userId);
       if (!assignment) return undefined;
       
@@ -416,7 +476,7 @@ export class MemStorage implements IStorage {
     const user = await this.getUser(userId);
     if (!user) return [];
     
-    if (user.role === 'sales') {
+    if (user.role === 'sales' as UserRole) {
       const assignments = await this.getSalesAssignments(userId);
       if (assignments.length === 0) return [];
       
@@ -433,7 +493,7 @@ export class MemStorage implements IStorage {
   }
   
   async getTeamPerformanceData(fromDate?: Date, toDate?: Date): Promise<any[]> {
-    const leadGenUsers = await this.getUsers('lead_gen');
+    const leadGenUsers = await this.getUsers('lead_gen' as UserRole);
     const result = [];
     
     for (const user of leadGenUsers) {

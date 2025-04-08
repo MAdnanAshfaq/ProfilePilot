@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
-import { FullPageLoading } from "@/components/ui/loading";
+import { Loader2 } from "lucide-react";
 import { Redirect, Route } from "wouter";
 
 export function ProtectedRoute({
@@ -7,7 +7,7 @@ export function ProtectedRoute({
   component: Component,
 }: {
   path: string;
-  component: () => React.JSX.Element;
+  component: React.ComponentType;
 }) {
   const { user, isLoading } = useAuth();
 
@@ -15,7 +15,11 @@ export function ProtectedRoute({
     <Route path={path}>
       {() => {
         if (isLoading) {
-          return <FullPageLoading />;
+          return (
+            <div className="flex items-center justify-center min-h-screen">
+              <Loader2 className="h-8 w-8 animate-spin text-border" />
+            </div>
+          );
         }
         
         if (!user) {

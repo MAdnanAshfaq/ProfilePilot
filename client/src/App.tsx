@@ -40,7 +40,7 @@ function Router() {
       <ProtectedRoute path="/lead-entry" component={LeadEntryPage} />
       
       {/* Fallback to 404 */}
-      <Route component={NotFound} />
+      <Route path="*">{() => <NotFound />}</Route>
     </Switch>
   );
 }
