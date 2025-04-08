@@ -4,6 +4,7 @@ import createMemoryStore from "memorystore";
 import connectPg from "connect-pg-simple";
 import { z } from "zod";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { eq, gte, lte, and } from "drizzle-orm";
 import pg from "pg";
 const { Pool } = pg;
 
@@ -587,7 +588,7 @@ export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: number): Promise<User | undefined> {
     try {
-      const result = await db.select().from(users).where({ id }).limit(1);
+      const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
       return result[0];
     } catch (error) {
       console.error('Error getting user:', error);
@@ -597,7 +598,7 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     try {
-      const result = await db.select().from(users).where({ username }).limit(1);
+      const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
       return result[0];
     } catch (error) {
       console.error('Error getting user by username:', error);
@@ -618,7 +619,7 @@ export class DatabaseStorage implements IStorage {
   async getUsers(role?: UserRole | string): Promise<User[]> {
     try {
       if (role) {
-        return await db.select().from(users).where({ role: role as UserRole });
+        return await db.select().from(users).where(eq(users.role, role as UserRole));
       }
       return await db.select().from(users);
     } catch (error) {
@@ -630,7 +631,7 @@ export class DatabaseStorage implements IStorage {
   // Profile operations
   async getProfile(id: number): Promise<Profile | undefined> {
     try {
-      const result = await db.select().from(profiles).where({ id }).limit(1);
+      const result = await db.select().from(profiles).where(eq(profiles.id, id)).limit(1);
       return result[0];
     } catch (error) {
       console.error('Error getting profile:', error);
@@ -662,7 +663,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateProfile(id: number, updatedFields: Partial<InsertProfile>): Promise<Profile | undefined> {
     try {
-      const result = await db.update(profiles).set(updatedFields).where({ id }).returning();
+      const result = await db.update(profiles).set(updatedFields).where(eq(profiles.id, id)).returning();
       return result[0];
     } catch (error) {
       console.error('Error updating profile:', error);
@@ -673,25 +674,25 @@ export class DatabaseStorage implements IStorage {
   async deleteProfile(id: number): Promise<boolean> {
     try {
       // Check if profile is in use
-      const leadGenAssignmentCount = await db.select({ count: { count: "id" } })
+      const leadGenAssignmentCount = await db.select({ count: { count: leadGenAssignments.id } })
         .from(leadGenAssignments)
-        .where({ profileId: id });
+        .where(eq(leadGenAssignments.profileId, id));
       
-      const salesAssignmentCount = await db.select({ count: { count: "id" } })
+      const salesAssignmentCount = await db.select({ count: { count: salesAssignments.id } })
         .from(salesAssignments)
-        .where({ profileId: id });
+        .where(eq(salesAssignments.profileId, id));
       
-      const targetCount = await db.select({ count: { count: "id" } })
+      const targetCount = await db.select({ count: { count: targets.id } })
         .from(targets)
-        .where({ profileId: id });
+        .where(eq(targets.profileId, id));
       
-      const progressUpdateCount = await db.select({ count: { count: "id" } })
+      const progressUpdateCount = await db.select({ count: { count: progressUpdates.id } })
         .from(progressUpdates)
-        .where({ profileId: id });
+        .where(eq(progressUpdates.profileId, id));
       
-      const leadEntryCount = await db.select({ count: { count: "id" } })
+      const leadEntryCount = await db.select({ count: { count: leadEntries.id } })
         .from(leadEntries)
-        .where({ profileId: id });
+        .where(eq(leadEntries.profileId, id));
       
       // If profile is in use, don't delete
       if (leadGenAssignmentCount[0].count > 0 || 
@@ -703,7 +704,7 @@ export class DatabaseStorage implements IStorage {
       }
       
       // Delete profile
-      const result = await db.delete(profiles).where({ id });
+      await db.delete(profiles).where(eq(profiles.id, id));
       return true;
     } catch (error) {
       console.error('Error deleting profile:', error);
@@ -714,7 +715,7 @@ export class DatabaseStorage implements IStorage {
   // Lead Gen Assignment operations
   async getLeadGenAssignment(userId: number): Promise<LeadGenAssignment | undefined> {
     try {
-      const result = await db.select().from(leadGenAssignments).where({ userId }).limit(1);
+      const result = await db.select().from(leadGenAssignments).where(eq(leadGenAssignments.userId, userId)).limit(1);
       return result[0];
     } catch (error) {
       console.error('Error getting lead gen assignment:', error);
@@ -755,7 +756,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteLeadGenAssignment(userId: number): Promise<boolean> {
     try {
-      await db.delete(leadGenAssignments).where({ userId });
+      await db.delete(leadGenAssignments).where(eq(leadGenAssignments.userId, userId));
       return true;
     } catch (error) {
       console.error('Error deleting lead gen assignment:', error);
@@ -767,7 +768,7 @@ export class DatabaseStorage implements IStorage {
     try {
       const result = await db.update(leadGenAssignments)
         .set({ profileId })
-        .where({ userId })
+        .where(eq(leadGenAssignments.userId, userId))
         .returning();
       return result[0];
     } catch (error) {
@@ -780,7 +781,7 @@ export class DatabaseStorage implements IStorage {
   async getSalesAssignments(userId?: number): Promise<SalesAssignment[]> {
     try {
       if (userId) {
-        return await db.select().from(salesAssignments).where({ userId });
+        return await db.select().from(salesAssignments).where(eq(salesAssignments.userId, userId));
       }
       return await db.select().from(salesAssignments);
     } catch (error) {
@@ -794,7 +795,12 @@ export class DatabaseStorage implements IStorage {
       // Check if assignment already exists
       const existingAssignments = await db.select()
         .from(salesAssignments)
-        .where({ userId: assignment.userId, profileId: assignment.profileId })
+        .where(
+          eq(salesAssignments.userId, assignment.userId)
+        )
+        .where(
+          eq(salesAssignments.profileId, assignment.profileId)
+        )
         .limit(1);
       
       if (existingAssignments.length > 0) {
@@ -812,7 +818,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSalesAssignment(id: number): Promise<boolean> {
     try {
-      await db.delete(salesAssignments).where({ id });
+      await db.delete(salesAssignments).where(eq(salesAssignments.id, id));
       return true;
     } catch (error) {
       console.error('Error deleting sales assignment:', error);
@@ -824,7 +830,7 @@ export class DatabaseStorage implements IStorage {
   async getTargets(userId?: number): Promise<Target[]> {
     try {
       if (userId) {
-        return await db.select().from(targets).where({ userId });
+        return await db.select().from(targets).where(eq(targets.userId, userId));
       }
       return await db.select().from(targets);
     } catch (error) {
@@ -847,7 +853,7 @@ export class DatabaseStorage implements IStorage {
     try {
       const result = await db.update(targets)
         .set({ jobsToFetch, jobsToApply })
-        .where({ id })
+        .where(eq(targets.id, id))
         .returning();
       return result[0];
     } catch (error) {
@@ -858,7 +864,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTarget(id: number): Promise<boolean> {
     try {
-      await db.delete(targets).where({ id });
+      await db.delete(targets).where(eq(targets.id, id));
       return true;
     } catch (error) {
       console.error('Error deleting target:', error);
@@ -888,15 +894,15 @@ export class DatabaseStorage implements IStorage {
       let query = db.select().from(progressUpdates);
       
       if (userId) {
-        query = query.where({ userId });
+        query = query.where(eq(progressUpdates.userId, userId));
       }
       
       if (fromDate) {
-        query = query.where('date', '>=', fromDate);
+        query = query.where(gte(progressUpdates.date, fromDate));
       }
       
       if (toDate) {
-        query = query.where('date', '<=', toDate);
+        query = query.where(lte(progressUpdates.date, toDate));
       }
       
       return await query;
@@ -922,15 +928,15 @@ export class DatabaseStorage implements IStorage {
       let query = db.select().from(leadEntries);
       
       if (userId) {
-        query = query.where({ userId });
+        query = query.where(eq(leadEntries.userId, userId));
       }
       
       if (fromDate) {
-        query = query.where('date', '>=', fromDate);
+        query = query.where(gte(leadEntries.date, fromDate));
       }
       
       if (toDate) {
-        query = query.where('date', '<=', toDate);
+        query = query.where(lte(leadEntries.date, toDate));
       }
       
       return await query;
@@ -952,7 +958,10 @@ export class DatabaseStorage implements IStorage {
 
   async updateLeadEntry(id: number, entry: Partial<InsertLeadEntry>): Promise<LeadEntry | undefined> {
     try {
-      const result = await db.update(leadEntries).set(entry).where({ id }).returning();
+      const result = await db.update(leadEntries)
+        .set(entry)
+        .where(eq(leadEntries.id, id))
+        .returning();
       return result[0];
     } catch (error) {
       console.error('Error updating lead entry:', error);
