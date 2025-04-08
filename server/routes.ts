@@ -620,14 +620,14 @@ app.get("/api/reports/weekly-sales", hasRole(["manager"]), async (req, res) => {
       return res.status(400).json({ message: "From date and to date are required" });
     }
     
-    const reportText = await generateWeeklySalesReport(fromDate, toDate);
+    const reportBuffer = await generateWeeklySalesReport(fromDate, toDate);
     const dateRange = formatReportDateRange(fromDate, toDate)
       .replace(/[^\w.-]/g, '_'); // Remove problematic characters from filename
     
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename=Weekly_Report_Sales_${dateRange}.txt`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename=Weekly_Report_Sales_${dateRange}.docx`);
     
-    res.send(reportText);
+    res.send(reportBuffer);
   } catch (error) {
     console.error('Error generating weekly sales report:', error);
     res.status(500).json({ message: "Failed to generate weekly sales report" });
@@ -639,13 +639,13 @@ app.get("/api/reports/daily", hasRole(["manager"]), async (req, res) => {
   try {
     const date = req.query.date ? new Date(req.query.date as string) : new Date();
     
-    const reportText = await generateDailyReport(date);
+    const reportBuffer = await generateDailyReport(date);
     const formattedDate = date.toISOString().split('T')[0];
     
-    res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename=Daily_Report_${formattedDate}.txt`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename=Daily_Report_${formattedDate}.docx`);
     
-    res.send(reportText);
+    res.send(reportBuffer);
   } catch (error) {
     console.error('Error generating daily report:', error);
     res.status(500).json({ message: "Failed to generate daily report" });

@@ -1,6 +1,19 @@
 import { format } from 'date-fns';
 import { storage } from './storage';
 import { ProgressUpdate, LeadEntry } from '@shared/schema';
+import { 
+  Document, 
+  Paragraph, 
+  Table, 
+  TableRow, 
+  TableCell, 
+  TextRun, 
+  AlignmentType, 
+  WidthType,
+  HeadingLevel,
+  BorderStyle,
+  Packer
+} from 'docx';
 
 // Helper function to generate formatted dates for the report title
 export function formatReportDateRange(fromDate: Date, toDate: Date): string {
@@ -11,8 +24,8 @@ export function formatReportDateRange(fromDate: Date, toDate: Date): string {
   return `${fromDay} ${month}–${toDay} ${month}`;
 }
 
-// Function to generate weekly sales report in the exact format as the sample
-export async function generateWeeklySalesReport(fromDate: Date, toDate: Date): Promise<string> {
+// Function to generate weekly sales report as a DOCX in the exact format as the sample
+export async function generateWeeklySalesReport(fromDate: Date, toDate: Date): Promise<Buffer> {
   // Get all lead gen users
   const leadGenUsers = await storage.getUsers('lead_gen');
   
@@ -38,42 +51,173 @@ export async function generateWeeklySalesReport(fromDate: Date, toDate: Date): P
     userProfileMap[update.userId][update.profileId] += update.jobsApplied;
   });
   
-  // Format the report
+  // Format the date range for the report title
   const dateRange = formatReportDateRange(fromDate, toDate);
-  let report = `Total Fetching & Applies ${dateRange}\n\n`;
   
-  // Add user joining dates (placeholder - would need actual joining dates from the user schema)
-  const employeeInfo = leadGenUsers.map(user => `${user.name} Joining Date 1st Feb`).join("\n");
-  report += `${employeeInfo}\n\n\n\n`;
-  
-  // Create table headers - S# and Employee Name are fixed, profile names are dynamic
-  report += 'S #\tEmployee Name';
-  
-  // Add profile names as column headers
-  profiles.forEach(profile => {
-    report += `\t${profile.name}`;
+  // Create document
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: [
+        // Title
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `Total Fetching & Applies ${dateRange}`,
+              bold: true,
+              size: 28,
+            }),
+          ],
+          spacing: {
+            after: 400,
+          },
+        }),
+        
+        // Employee joining information
+        ...leadGenUsers.map(user => 
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `${user.name}, Joining Date 1st Feb`,
+                size: 24,
+              }),
+            ],
+            spacing: {
+              after: 200,
+            },
+          })
+        ),
+        
+        // Spacer
+        new Paragraph({
+          children: [new TextRun({ text: "" })],
+          spacing: { after: 200 },
+        }),
+        
+        // Table with profile data
+        createWeeklySalesTable(leadGenUsers, profiles, userProfileMap),
+      ],
+    }],
   });
   
-  report += '\n\t\t' + profiles.map(() => 'Applied').join('\t') + '\n';
-  
-  // Add data rows
-  leadGenUsers.forEach((user, index) => {
-    report += `${index + 1}\t${user.name}`;
-    
-    // For each profile, add the jobs applied count
-    profiles.forEach(profile => {
-      const appliedCount = userProfileMap[user.id]?.[profile.id] || '';
-      report += `\t${appliedCount}`;
-    });
-    
-    report += '\n';
-  });
-  
-  return report;
+  // Generate buffer
+  return await Packer.toBuffer(doc);
 }
 
-// Function to generate daily report
-export async function generateDailyReport(date: Date): Promise<string> {
+// Helper function to create a table for the weekly sales report
+function createWeeklySalesTable(
+  users: any[], 
+  profiles: any[], 
+  userProfileMap: Record<number, Record<number, number>>
+): Table {
+  // Create the table
+  const table = new Table({
+    width: {
+      size: 100,
+      type: WidthType.PERCENTAGE,
+    },
+    borders: {
+      top: { style: BorderStyle.SINGLE, size: 1 },
+      bottom: { style: BorderStyle.SINGLE, size: 1 },
+      left: { style: BorderStyle.SINGLE, size: 1 },
+      right: { style: BorderStyle.SINGLE, size: 1 },
+      insideHorizontal: { style: BorderStyle.SINGLE, size: 1 },
+      insideVertical: { style: BorderStyle.SINGLE, size: 1 },
+    },
+    rows: [
+      // Header row 1: S# and Employee Name + Profile names
+      new TableRow({
+        children: [
+          // S# header
+          new TableCell({
+            children: [new Paragraph({ 
+              children: [new TextRun({ text: "S #", bold: true })],
+              alignment: AlignmentType.CENTER,
+            })],
+            verticalAlign: "center",
+          }),
+          // Employee Name header
+          new TableCell({
+            children: [new Paragraph({ 
+              children: [new TextRun({ text: "Employee Name", bold: true })],
+              alignment: AlignmentType.CENTER,
+            })],
+            verticalAlign: "center",
+          }),
+          // Profile name headers
+          ...profiles.map(profile => 
+            new TableCell({
+              children: [new Paragraph({ 
+                children: [new TextRun({ text: profile.name, bold: true })],
+                alignment: AlignmentType.CENTER,
+              })],
+              verticalAlign: "center",
+            })
+          ),
+        ],
+      }),
+      
+      // Header row 2: Empty + Empty + "Applied" for each profile
+      new TableRow({
+        children: [
+          // Empty S# cell
+          new TableCell({
+            children: [new Paragraph({ children: [] })],
+          }),
+          // Empty Employee Name cell
+          new TableCell({
+            children: [new Paragraph({ children: [] })],
+          }),
+          // "Applied" cells for each profile
+          ...profiles.map(() => 
+            new TableCell({
+              children: [new Paragraph({
+                children: [new TextRun({ text: "Applied", bold: true })],
+                alignment: AlignmentType.CENTER,
+              })],
+            })
+          ),
+        ],
+      }),
+      
+      // Data rows: one per user
+      ...users.map((user, index) => 
+        new TableRow({
+          children: [
+            // S# cell
+            new TableCell({
+              children: [new Paragraph({
+                children: [new TextRun({ text: (index + 1).toString() })],
+                alignment: AlignmentType.CENTER,
+              })],
+            }),
+            // Employee Name cell
+            new TableCell({
+              children: [new Paragraph({
+                children: [new TextRun({ text: user.name })],
+              })],
+            }),
+            // Data cells for each profile
+            ...profiles.map(profile => {
+              const appliedCount = userProfileMap[user.id]?.[profile.id] || '';
+              return new TableCell({
+                children: [new Paragraph({
+                  children: [new TextRun({ text: appliedCount.toString() })],
+                  alignment: AlignmentType.CENTER,
+                })],
+              });
+            }),
+          ],
+        })
+      ),
+    ],
+  });
+  
+  return table;
+}
+
+// Function to generate daily report as a DOCX file
+export async function generateDailyReport(date: Date): Promise<Buffer> {
   const formattedDate = format(date, 'MMM do, yyyy');
   
   // Get all lead gen users
@@ -106,21 +250,143 @@ export async function generateDailyReport(date: Date): Promise<string> {
     userUpdates[update.userId].jobsApplied += update.jobsApplied;
   });
   
-  // Format the report
-  let report = `Daily Performance Report for ${formattedDate}\n\n`;
-  
-  // Create table
-  report += 'S #\tEmployee Name\tProfile\tJobs Fetched\tJobs Applied\tCompletion\n';
-  
-  leadGenUsers.forEach((user, index) => {
-    const userData = userUpdates[user.id];
-    if (userData) {
-      const completion = ((userData.jobsApplied / userData.jobsFetched) * 100).toFixed(1);
-      report += `${index + 1}\t${user.name}\t${userData.profileName}\t${userData.jobsFetched}\t${userData.jobsApplied}\t${completion}%\n`;
-    } else {
-      report += `${index + 1}\t${user.name}\tNo data\t0\t0\t0%\n`;
-    }
+  // Create document
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: [
+        // Title
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `Daily Performance Report for ${formattedDate}`,
+              bold: true,
+              size: 28,
+            }),
+          ],
+          spacing: {
+            after: 400,
+          },
+        }),
+        
+        // Create table for daily report
+        new Table({
+          width: {
+            size: 100,
+            type: WidthType.PERCENTAGE,
+          },
+          borders: {
+            top: { style: BorderStyle.SINGLE, size: 1 },
+            bottom: { style: BorderStyle.SINGLE, size: 1 },
+            left: { style: BorderStyle.SINGLE, size: 1 },
+            right: { style: BorderStyle.SINGLE, size: 1 },
+            insideHorizontal: { style: BorderStyle.SINGLE, size: 1 },
+            insideVertical: { style: BorderStyle.SINGLE, size: 1 },
+          },
+          rows: [
+            // Header row
+            new TableRow({
+              children: [
+                new TableCell({
+                  children: [new Paragraph({ 
+                    children: [new TextRun({ text: "S #", bold: true })],
+                    alignment: AlignmentType.CENTER,
+                  })],
+                }),
+                new TableCell({
+                  children: [new Paragraph({ 
+                    children: [new TextRun({ text: "Employee Name", bold: true })],
+                    alignment: AlignmentType.CENTER,
+                  })],
+                }),
+                new TableCell({
+                  children: [new Paragraph({ 
+                    children: [new TextRun({ text: "Profile", bold: true })],
+                    alignment: AlignmentType.CENTER,
+                  })],
+                }),
+                new TableCell({
+                  children: [new Paragraph({ 
+                    children: [new TextRun({ text: "Jobs Fetched", bold: true })],
+                    alignment: AlignmentType.CENTER,
+                  })],
+                }),
+                new TableCell({
+                  children: [new Paragraph({ 
+                    children: [new TextRun({ text: "Jobs Applied", bold: true })],
+                    alignment: AlignmentType.CENTER,
+                  })],
+                }),
+                new TableCell({
+                  children: [new Paragraph({ 
+                    children: [new TextRun({ text: "Completion", bold: true })],
+                    alignment: AlignmentType.CENTER,
+                  })],
+                }),
+              ],
+            }),
+            
+            // Data rows
+            ...leadGenUsers.map((user, index) => {
+              const userData = userUpdates[user.id];
+              const jobsFetched = userData ? userData.jobsFetched : 0;
+              const jobsApplied = userData ? userData.jobsApplied : 0;
+              const profileName = userData ? userData.profileName : "No data";
+              const completion = jobsFetched > 0 
+                ? ((jobsApplied / jobsFetched) * 100).toFixed(1) + "%" 
+                : "0%";
+              
+              return new TableRow({
+                children: [
+                  // S# cell
+                  new TableCell({
+                    children: [new Paragraph({
+                      children: [new TextRun({ text: (index + 1).toString() })],
+                      alignment: AlignmentType.CENTER,
+                    })],
+                  }),
+                  // Employee Name cell
+                  new TableCell({
+                    children: [new Paragraph({
+                      children: [new TextRun({ text: user.name })],
+                    })],
+                  }),
+                  // Profile cell
+                  new TableCell({
+                    children: [new Paragraph({
+                      children: [new TextRun({ text: profileName })],
+                    })],
+                  }),
+                  // Jobs Fetched cell
+                  new TableCell({
+                    children: [new Paragraph({
+                      children: [new TextRun({ text: jobsFetched.toString() })],
+                      alignment: AlignmentType.CENTER,
+                    })],
+                  }),
+                  // Jobs Applied cell
+                  new TableCell({
+                    children: [new Paragraph({
+                      children: [new TextRun({ text: jobsApplied.toString() })],
+                      alignment: AlignmentType.CENTER,
+                    })],
+                  }),
+                  // Completion cell
+                  new TableCell({
+                    children: [new Paragraph({
+                      children: [new TextRun({ text: completion })],
+                      alignment: AlignmentType.CENTER,
+                    })],
+                  }),
+                ],
+              });
+            }),
+          ],
+        }),
+      ],
+    }],
   });
   
-  return report;
+  // Generate buffer
+  return await Packer.toBuffer(doc);
 }
