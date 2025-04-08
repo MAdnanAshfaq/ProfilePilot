@@ -41,6 +41,7 @@ export interface IStorage {
   getTargets(userId?: number): Promise<Target[]>;
   createTarget(target: InsertTarget): Promise<Target>;
   updateTarget(id: number, jobsToFetch: number, jobsToApply: number): Promise<Target | undefined>;
+  deleteTarget(id: number): Promise<boolean>;
   
   // Progress Update operations
   getProgressUpdates(userId?: number, fromDate?: Date, toDate?: Date): Promise<ProgressUpdate[]>;
@@ -58,6 +59,12 @@ export interface IStorage {
   
   // Session store
   sessionStore: SessionStore;
+  
+  // Default users initialization
+  initializeDefaultUsers(): Promise<void>;
+  
+  // Resume operations
+  getProfileResume(profileId: number): Promise<{content: string, filename: string} | undefined>;
 }
 
 // Memory storage implementation
@@ -102,62 +109,13 @@ export class MemStorage implements IStorage {
     });
     
     // Initialize with default data
-    this.initializeDefaultUsers();
+    this._initializeDefaultUsers();
     this.initializeDefaultProfiles();
   }
 
-  private async initializeDefaultUsers() {
-    // Create default users if they don't exist
-    const defaultUsers: {
-      username: string;
-      password: string;
-      name: string;
-      email: string;
-      role: "manager" | "lead_gen" | "sales";
-    }[] = [
-      {
-        username: "manager",
-        password: "password123", // In production this would be hashed
-        name: "Manager User",
-        email: "manager@example.com",
-        role: "manager"
-      },
-      {
-        username: "leadgen1",
-        password: "password123",
-        name: "Lead Gen User 1",
-        email: "leadgen1@example.com",
-        role: "lead_gen"
-      },
-      {
-        username: "leadgen2",
-        password: "password123",
-        name: "Lead Gen User 2",
-        email: "leadgen2@example.com",
-        role: "lead_gen"
-      },
-      {
-        username: "sales1",
-        password: "password123",
-        name: "Sales User 1",
-        email: "sales1@example.com",
-        role: "sales"
-      },
-      {
-        username: "sales2",
-        password: "password123",
-        name: "Sales User 2",
-        email: "sales2@example.com",
-        role: "sales"
-      }
-    ];
-
-    for (const user of defaultUsers) {
-      const existingUser = await this.getUserByUsername(user.username);
-      if (!existingUser) {
-        await this.createUser(user);
-      }
-    }
+  // Helper method for initializing during construction
+  private async _initializeDefaultUsers() {
+    await this.initializeDefaultUsers();
   }
   
   private async initializeDefaultProfiles() {
@@ -376,6 +334,75 @@ export class MemStorage implements IStorage {
     target.jobsToApply = jobsToApply;
     
     return target;
+  }
+  
+  async deleteTarget(id: number): Promise<boolean> {
+    return this.targets.delete(id);
+  }
+  
+  async getProfileResume(profileId: number): Promise<{content: string, filename: string} | undefined> {
+    const profile = await this.getProfile(profileId);
+    if (!profile || !profile.resumeContent) return undefined;
+    
+    return {
+      content: profile.resumeContent,
+      filename: `${profile.name.replace(/\s+/g, '_')}_Resume.pdf`
+    };
+  }
+  
+  // Public method to initialize default users (mainly for API access)
+  async initializeDefaultUsers(): Promise<void> {
+    // Create default users if they don't exist
+    const defaultUsers: {
+      username: string;
+      password: string;
+      name: string;
+      email: string;
+      role: "manager" | "lead_gen" | "sales";
+    }[] = [
+      {
+        username: "manager",
+        password: "password123", // In production this would be hashed
+        name: "Manager User",
+        email: "manager@example.com",
+        role: "manager"
+      },
+      {
+        username: "leadgen1",
+        password: "password123",
+        name: "Lead Gen User 1",
+        email: "leadgen1@example.com",
+        role: "lead_gen"
+      },
+      {
+        username: "leadgen2",
+        password: "password123",
+        name: "Lead Gen User 2",
+        email: "leadgen2@example.com",
+        role: "lead_gen"
+      },
+      {
+        username: "sales1",
+        password: "password123",
+        name: "Sales User 1",
+        email: "sales1@example.com",
+        role: "sales"
+      },
+      {
+        username: "sales2",
+        password: "password123",
+        name: "Sales User 2",
+        email: "sales2@example.com",
+        role: "sales"
+      }
+    ];
+
+    for (const user of defaultUsers) {
+      const existingUser = await this.getUserByUsername(user.username);
+      if (!existingUser) {
+        await this.createUser(user);
+      }
+    }
   }
   
   // Progress Update operations

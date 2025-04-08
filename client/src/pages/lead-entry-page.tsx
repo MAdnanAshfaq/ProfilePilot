@@ -78,12 +78,12 @@ export default function LeadEntryPage() {
   });
   
   // Get assigned profiles
-  const { data: myProfiles, isLoading: isLoadingProfiles } = useQuery({
+  const { data: myProfiles = [], isLoading: isLoadingProfiles } = useQuery<any[]>({
     queryKey: ["/api/my-profiles"],
   });
   
   // Get lead entries
-  const { data: leadEntries, isLoading: isLoadingEntries } = useQuery({
+  const { data: leadEntries = [], isLoading: isLoadingEntries } = useQuery<any[]>({
     queryKey: ["/api/lead-entries"],
   });
   
@@ -305,7 +305,7 @@ export default function LeadEntryPage() {
   }
   
   // Get targets for the selected profile
-  const { data: targets } = useQuery({
+  const { data: targets = [] } = useQuery<any[]>({
     queryKey: ["/api/targets"],
     enabled: !!myProfiles && myProfiles.length > 0,
   });

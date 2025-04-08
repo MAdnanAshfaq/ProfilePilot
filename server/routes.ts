@@ -318,6 +318,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  app.delete("/api/targets/:id", hasRole(["manager"]), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const success = await storage.deleteTarget(id);
+      
+      if (success) {
+        res.status(204).send();
+      } else {
+        res.status(404).json({ message: "Target not found" });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete target" });
+    }
+  });
+  
   // Progress Update routes
   app.get("/api/progress-updates", isAuthenticated, async (req, res) => {
     try {
