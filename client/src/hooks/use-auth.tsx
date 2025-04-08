@@ -34,20 +34,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
-      const res = await apiRequest("POST", "/api/login", credentials);
-      return await res.json();
+      try {
+        const res = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(credentials),
+          credentials: "include"
+        });
+        
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ message: res.statusText || "Login failed" }));
+          throw new Error(errorData.message || "Authentication failed");
+        }
+        
+        return await res.json();
+      } catch (err) {
+        if (err instanceof Error) {
+          throw err;
+        }
+        throw new Error("Login failed. Please try again.");
+      }
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
       toast({
         title: "Login successful",
-        description: `Welcome back, ${user.name}!`,
+        description: `Welcome back, ${user.name || user.username}!`,
       });
     },
     onError: (error: Error) => {
+      console.error("Login error:", error);
       toast({
         title: "Login failed",
-        description: error.message,
+        description: error.message || "Invalid username or password",
         variant: "destructive",
       });
     },

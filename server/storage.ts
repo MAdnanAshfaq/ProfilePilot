@@ -103,11 +103,31 @@ export class MemStorage implements IStorage {
   
   private async initializeDefaultProfiles() {
     const defaultProfiles = [
-      { name: "Software Engineer", description: "Full-stack developer with 5 years of experience in React, Node.js, and AWS." },
-      { name: "UX Designer", description: "Designer with expertise in user research, wireframing, and prototyping." },
-      { name: "Project Manager", description: "PMP certified manager with experience leading agile teams." },
-      { name: "Marketing Specialist", description: "Digital marketing expert with SEO and content creation skills." },
-      { name: "Data Analyst", description: "Skilled in data visualization, SQL, and statistical analysis." }
+      { 
+        name: "Software Engineer", 
+        description: "Full-stack developer with 5 years of experience in React, Node.js, and AWS.",
+        resumeContent: "John Doe\nSoftware Engineer\n\nExperience:\n- Full Stack Developer at Tech Co (2018-Present)\n- Frontend Developer at Web Solutions (2016-2018)\n\nSkills:\n- JavaScript, TypeScript, React, Node.js\n- AWS, Docker, Kubernetes\n- REST API design, GraphQL\n- Agile methodologies"
+      },
+      { 
+        name: "UX Designer", 
+        description: "Designer with expertise in user research, wireframing, and prototyping.",
+        resumeContent: "Jane Smith\nUX Designer\n\nExperience:\n- Senior UX Designer at Design Studio (2019-Present)\n- UX Researcher at User First (2017-2019)\n\nSkills:\n- User research and testing\n- Wireframing and prototyping\n- Figma, Sketch, Adobe XD\n- Information architecture"
+      },
+      { 
+        name: "Project Manager", 
+        description: "PMP certified manager with experience leading agile teams.",
+        resumeContent: "Michael Johnson\nProject Manager\n\nExperience:\n- Senior Project Manager at Enterprise Inc (2016-Present)\n- Project Coordinator at Business Solutions (2014-2016)\n\nSkills:\n- PMP Certified\n- Agile and Scrum methodologies\n- Budget management\n- Team leadership"
+      },
+      { 
+        name: "Marketing Specialist", 
+        description: "Digital marketing expert with SEO and content creation skills.",
+        resumeContent: "Sarah Williams\nMarketing Specialist\n\nExperience:\n- Digital Marketing Manager at Brand Co (2018-Present)\n- Content Creator at Marketing Agency (2016-2018)\n\nSkills:\n- SEO optimization\n- Content strategy\n- Social media management\n- Analytics and reporting"
+      },
+      { 
+        name: "Data Analyst", 
+        description: "Skilled in data visualization, SQL, and statistical analysis.",
+        resumeContent: "David Chen\nData Analyst\n\nExperience:\n- Senior Data Analyst at Analytics Corp (2017-Present)\n- Business Intelligence Analyst at Data Solutions (2015-2017)\n\nSkills:\n- SQL, Python, R\n- Tableau, Power BI\n- Statistical analysis\n- Data cleaning and ETL processes"
+      }
     ];
     
     for (const profile of defaultProfiles) {

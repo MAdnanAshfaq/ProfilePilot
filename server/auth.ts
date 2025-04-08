@@ -22,10 +22,26 @@ async function hashPassword(password: string) {
 }
 
 async function comparePasswords(supplied: string, stored: string) {
-  const [hashed, salt] = stored.split(".");
-  const hashedBuf = Buffer.from(hashed, "hex");
-  const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
-  return timingSafeEqual(hashedBuf, suppliedBuf);
+  try {
+    // Check for valid format
+    if (!stored || !stored.includes(".")) {
+      console.error("Invalid stored password format");
+      return false;
+    }
+    
+    const [hashed, salt] = stored.split(".");
+    if (!hashed || !salt) {
+      console.error("Missing hash or salt in stored password");
+      return false;
+    }
+    
+    const hashedBuf = Buffer.from(hashed, "hex");
+    const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
+    return timingSafeEqual(hashedBuf, suppliedBuf);
+  } catch (error) {
+    console.error("Error comparing passwords:", error);
+    return false;
+  }
 }
 
 export function setupAuth(app: Express) {
@@ -93,9 +109,27 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Login route
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
+  // Login route with better error handling
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err: Error | null, user: Express.User | false, info: { message: string } | undefined) => {
+      if (err) {
+        console.error("Authentication error:", err);
+        return next(err);
+      }
+      
+      if (!user) {
+        console.log("Login failed for username:", req.body.username);
+        return res.status(401).json({ message: "Invalid username or password" });
+      }
+      
+      req.login(user, (loginErr: Error | null) => {
+        if (loginErr) {
+          console.error("Login session error:", loginErr);
+          return next(loginErr);
+        }
+        return res.status(200).json(user);
+      });
+    })(req, res, next);
   });
 
   // Logout route
