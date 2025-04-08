@@ -1,41 +1,60 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useAuth } from "@/hooks/use-auth";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { insertUserSchema } from "@shared/schema";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Redirect } from "wouter";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { insertUserSchema } from "@shared/schema";
 
+// UI Components
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { LockIcon, UserIcon, BriefcaseIcon } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+
+// Define the login form schema
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),
 });
 
-const registerSchema = insertUserSchema.pick({
-  username: true,
-  password: true,
-  name: true,
-  email: true,
-  role: true,
-}).extend({
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  email: z.string().email("Invalid email format"),
-});
+// Use the insert user schema from the shared schema for registration
+const registerSchema = insertUserSchema
+  .extend({
+    confirmPassword: z.string().min(1, "Confirm password is required"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
 type LoginFormData = z.infer<typeof loginSchema>;
 type RegisterFormData = z.infer<typeof registerSchema>;
 
 export default function AuthPage() {
-  const { user, loginMutation, registerMutation } = useAuth();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
+  const { toast } = useToast();
+  const { user, loginMutation, registerMutation } = useAuth();
 
+  // Initialize the login form
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -44,223 +63,364 @@ export default function AuthPage() {
     },
   });
 
+  // Initialize the registration form
   const registerForm = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
       username: "",
       password: "",
+      confirmPassword: "",
       name: "",
-      email: "",
       role: "lead_gen",
     },
   });
 
+  // Handle login form submission
   const onLoginSubmit = (data: LoginFormData) => {
-    loginMutation.mutate(data);
+    loginMutation.mutate(data, {
+      onSuccess: () => {
+        toast({
+          title: "Login successful",
+          description: "Welcome back!",
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: "Login failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      },
+    });
   };
 
+  // Handle registration form submission
   const onRegisterSubmit = (data: RegisterFormData) => {
-    registerMutation.mutate(data);
+    // Remove confirmPassword as it's not in the schema
+    const { confirmPassword, ...registerData } = data;
+    
+    registerMutation.mutate(registerData, {
+      onSuccess: () => {
+        toast({
+          title: "Registration successful",
+          description: "Your account has been created",
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: "Registration failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      },
+    });
   };
 
-  // If user is already logged in, redirect to home page
+  // Redirect if user is already logged in
   if (user) {
     return <Redirect to="/" />;
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex flex-col lg:flex-row">
-      <div className="flex-1 flex items-center justify-center p-8">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "login" | "register")}>
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="register">Register</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="login">
-                <form onSubmit={loginForm.handleSubmit(onLoginSubmit)}>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="login-username">Username</Label>
-                      <Input 
-                        id="login-username"
-                        type="text"
-                        {...loginForm.register("username")} 
-                      />
-                      {loginForm.formState.errors.username && (
-                        <p className="text-sm text-red-500">{loginForm.formState.errors.username.message}</p>
-                      )}
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="login-password">Password</Label>
-                      <Input 
-                        id="login-password"
-                        type="password"
-                        {...loginForm.register("password")} 
-                      />
-                      {loginForm.formState.errors.password && (
-                        <p className="text-sm text-red-500">{loginForm.formState.errors.password.message}</p>
-                      )}
-                    </div>
-                    
-                    <Button 
-                      type="submit" 
-                      className="w-full"
-                      disabled={loginMutation.isPending}
-                    >
-                      {loginMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Signing in...
-                        </>
-                      ) : "Sign In"}
-                    </Button>
-                  </div>
-                </form>
-              </TabsContent>
-              
-              <TabsContent value="register">
-                <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)}>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="register-name">Full Name</Label>
-                      <Input 
-                        id="register-name"
-                        type="text"
-                        {...registerForm.register("name")} 
-                      />
-                      {registerForm.formState.errors.name && (
-                        <p className="text-sm text-red-500">{registerForm.formState.errors.name.message}</p>
-                      )}
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="register-email">Email</Label>
-                      <Input 
-                        id="register-email"
-                        type="email"
-                        {...registerForm.register("email")} 
-                      />
-                      {registerForm.formState.errors.email && (
-                        <p className="text-sm text-red-500">{registerForm.formState.errors.email.message}</p>
-                      )}
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="register-username">Username</Label>
-                      <Input 
-                        id="register-username"
-                        type="text"
-                        {...registerForm.register("username")} 
-                      />
-                      {registerForm.formState.errors.username && (
-                        <p className="text-sm text-red-500">{registerForm.formState.errors.username.message}</p>
-                      )}
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="register-password">Password</Label>
-                      <Input 
-                        id="register-password"
-                        type="password"
-                        {...registerForm.register("password")} 
-                      />
-                      {registerForm.formState.errors.password && (
-                        <p className="text-sm text-red-500">{registerForm.formState.errors.password.message}</p>
-                      )}
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="register-role">Role</Label>
-                      <Select 
-                        defaultValue={registerForm.getValues("role")} 
-                        onValueChange={(value) => registerForm.setValue("role", value)}
-                      >
-                        <SelectTrigger id="register-role">
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="manager">Manager</SelectItem>
-                          <SelectItem value="lead_gen">Lead Generation Team</SelectItem>
-                          <SelectItem value="sales">Sales Coordinator</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {registerForm.formState.errors.role && (
-                        <p className="text-sm text-red-500">{registerForm.formState.errors.role.message}</p>
-                      )}
-                    </div>
-                    
-                    <Button 
-                      type="submit" 
-                      className="w-full"
-                      disabled={registerMutation.isPending}
-                    >
-                      {registerMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Creating account...
-                        </>
-                      ) : "Create Account"}
-                    </Button>
-                  </div>
-                </form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </div>
-      
-      <div className="flex-1 bg-primary p-12 text-white hidden lg:flex flex-col justify-center">
-        <div className="max-w-md mx-auto">
-          <h1 className="text-3xl font-bold mb-6">Resume Manager</h1>
-          <p className="mb-8 text-lg opacity-90">
-            A complete solution for managing job application processes with fixed resumes.
+    <div className="min-h-screen flex flex-col md:flex-row">
+      {/* Left side - Auth forms */}
+      <div className="flex flex-col justify-center p-8 lg:p-12 w-full md:w-1/2">
+        <div className="mx-auto w-full max-w-md">
+          <h1 className="text-3xl font-bold mb-1">Resume Manager</h1>
+          <p className="text-muted-foreground mb-8">
+            Log in or create an account to continue
           </p>
-          
-          <div className="space-y-4">
-            <div className="flex items-start">
-              <div className="bg-white bg-opacity-20 p-2 rounded-full mr-4">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="9" cy="7" r="4"></circle>
-                  <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                </svg>
+
+          <Tabs
+            defaultValue="login"
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as "login" | "register")}
+            className="w-full"
+          >
+            <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsTrigger value="login">Login</TabsTrigger>
+              <TabsTrigger value="register">Register</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="login">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Welcome back</CardTitle>
+                  <CardDescription>
+                    Enter your credentials to access your account
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Form {...loginForm}>
+                    <form
+                      onSubmit={loginForm.handleSubmit(onLoginSubmit)}
+                      className="space-y-4"
+                    >
+                      <FormField
+                        control={loginForm.control}
+                        name="username"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Username</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <UserIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  className="pl-9"
+                                  placeholder="Enter your username"
+                                  {...field}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={loginForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Password</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <LockIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  className="pl-9"
+                                  type="password"
+                                  placeholder="Enter your password"
+                                  {...field}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={loginMutation.isPending}
+                      >
+                        {loginMutation.isPending ? "Logging in..." : "Login"}
+                      </Button>
+                    </form>
+                  </Form>
+                </CardContent>
+                <CardFooter className="flex justify-center">
+                  <Button
+                    variant="ghost"
+                    onClick={() => setActiveTab("register")}
+                  >
+                    Don't have an account? Register
+                  </Button>
+                </CardFooter>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="register">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Create an account</CardTitle>
+                  <CardDescription>
+                    Enter your information to create a new account
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Form {...registerForm}>
+                    <form
+                      onSubmit={registerForm.handleSubmit(onRegisterSubmit)}
+                      className="space-y-4"
+                    >
+                      <FormField
+                        control={registerForm.control}
+                        name="name"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Full Name</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <UserIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  className="pl-9"
+                                  placeholder="Enter your full name"
+                                  {...field}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={registerForm.control}
+                        name="username"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Username</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <UserIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  className="pl-9"
+                                  placeholder="Choose a username"
+                                  {...field}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={registerForm.control}
+                        name="role"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Role</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <BriefcaseIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <select
+                                  className="pl-9 w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                  {...field}
+                                >
+                                  <option value="lead_gen">Lead Generator</option>
+                                  <option value="sales">Sales Coordinator</option>
+                                  <option value="manager">Manager</option>
+                                </select>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={registerForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Password</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <LockIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  className="pl-9"
+                                  type="password"
+                                  placeholder="Create a password"
+                                  {...field}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={registerForm.control}
+                        name="confirmPassword"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Confirm Password</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <LockIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  className="pl-9"
+                                  type="password"
+                                  placeholder="Confirm your password"
+                                  {...field}
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={registerMutation.isPending}
+                      >
+                        {registerMutation.isPending
+                          ? "Creating account..."
+                          : "Create Account"}
+                      </Button>
+                    </form>
+                  </Form>
+                </CardContent>
+                <CardFooter className="flex justify-center">
+                  <Button
+                    variant="ghost"
+                    onClick={() => setActiveTab("login")}
+                  >
+                    Already have an account? Login
+                  </Button>
+                </CardFooter>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
+
+      {/* Right side - Hero section */}
+      <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-primary/90 to-primary/70 text-white">
+        <div className="px-12 py-24 flex flex-col justify-center max-w-lg mx-auto">
+          <h2 className="text-4xl font-bold mb-6">
+            Professional Resume Management
+          </h2>
+          <p className="text-lg mb-8">
+            Streamline your recruiting operations with our comprehensive resume management
+            system designed for lead generation teams and sales coordinators.
+          </p>
+
+          <div className="space-y-6">
+            <div className="flex items-start space-x-4">
+              <div className="mt-1 bg-white/10 p-2 rounded-full">
+                <UserIcon className="h-5 w-5" />
               </div>
               <div>
                 <h3 className="font-semibold text-xl mb-1">Role-Based Access</h3>
-                <p className="opacity-80">Different dashboards and capabilities for managers, lead generators, and sales coordinators.</p>
+                <p className="text-white/80">
+                  Different views and capabilities for managers, lead generators, and sales coordinators.
+                </p>
               </div>
             </div>
-            
-            <div className="flex items-start">
-              <div className="bg-white bg-opacity-20 p-2 rounded-full mr-4">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+
+            <Separator className="bg-white/20" />
+
+            <div className="flex items-start space-x-4">
+              <div className="mt-1 bg-white/10 p-2 rounded-full">
+                <BriefcaseIcon className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-xl mb-1">Profile Management</h3>
+                <p className="text-white/80">
+                  Create, assign, and manage professional profiles with detailed resume tracking.
+                </p>
+              </div>
+            </div>
+
+            <Separator className="bg-white/20" />
+
+            <div className="flex items-start space-x-4">
+              <div className="mt-1 bg-white/10 p-2 rounded-full">
+                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
                 </svg>
               </div>
               <div>
                 <h3 className="font-semibold text-xl mb-1">Performance Tracking</h3>
-                <p className="opacity-80">Monitor team progress, targets, and lead generation with visual dashboards.</p>
-              </div>
-            </div>
-            
-            <div className="flex items-start">
-              <div className="bg-white bg-opacity-20 p-2 rounded-full mr-4">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                  <line x1="16" y1="13" x2="8" y2="13"></line>
-                  <line x1="16" y1="17" x2="8" y2="17"></line>
-                  <polyline points="10 9 9 9 8 9"></polyline>
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-semibold text-xl mb-1">Comprehensive Reports</h3>
-                <p className="opacity-80">Generate and download detailed reports for analysis and planning.</p>
+                <p className="text-white/80">
+                  Set targets, track progress, and generate comprehensive reports.
+                </p>
               </div>
             </div>
           </div>

@@ -1,9 +1,22 @@
 import { users, type User, type InsertUser, profiles, type Profile, type InsertProfile, leadGenAssignments, type LeadGenAssignment, type InsertLeadGenAssignment, salesAssignments, type SalesAssignment, type InsertSalesAssignment, targets, type Target, type InsertTarget, progressUpdates, type ProgressUpdate, type InsertProgressUpdate, leadEntries, type LeadEntry, type InsertLeadEntry } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import connectPg from "connect-pg-simple";
 import { z } from "zod";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+const { Pool } = pg;
+
+// Create a connection pool to the PostgreSQL database
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+// Initialize Drizzle with the PostgreSQL connection
+const db = drizzle(pool);
 
 const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
 
 // Define the user role type for strong typing
 type UserRole = "manager" | "lead_gen" | "sales";
@@ -560,4 +573,573 @@ export class MemStorage implements IStorage {
 }
 
 // Create and export the storage instance
-export const storage = new MemStorage();
+// Database storage implementation
+export class DatabaseStorage implements IStorage {
+  sessionStore: SessionStore;
+
+  constructor() {
+    this.sessionStore = new PostgresSessionStore({ 
+      pool, 
+      createTableIfMissing: true 
+    });
+  }
+
+  // User operations
+  async getUser(id: number): Promise<User | undefined> {
+    try {
+      const result = await db.select().from(users).where({ id }).limit(1);
+      return result[0];
+    } catch (error) {
+      console.error('Error getting user:', error);
+      return undefined;
+    }
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    try {
+      const result = await db.select().from(users).where({ username }).limit(1);
+      return result[0];
+    } catch (error) {
+      console.error('Error getting user by username:', error);
+      return undefined;
+    }
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    try {
+      const result = await db.insert(users).values(user).returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error creating user:', error);
+      throw error;
+    }
+  }
+
+  async getUsers(role?: UserRole | string): Promise<User[]> {
+    try {
+      if (role) {
+        return await db.select().from(users).where({ role: role as UserRole });
+      }
+      return await db.select().from(users);
+    } catch (error) {
+      console.error('Error getting users:', error);
+      return [];
+    }
+  }
+
+  // Profile operations
+  async getProfile(id: number): Promise<Profile | undefined> {
+    try {
+      const result = await db.select().from(profiles).where({ id }).limit(1);
+      return result[0];
+    } catch (error) {
+      console.error('Error getting profile:', error);
+      return undefined;
+    }
+  }
+
+  async getProfiles(): Promise<Profile[]> {
+    try {
+      return await db.select().from(profiles);
+    } catch (error) {
+      console.error('Error getting profiles:', error);
+      return [];
+    }
+  }
+
+  async createProfile(profile: InsertProfile): Promise<Profile> {
+    try {
+      const result = await db.insert(profiles).values({
+        ...profile,
+        createdAt: new Date(),
+      }).returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error creating profile:', error);
+      throw error;
+    }
+  }
+
+  async updateProfile(id: number, updatedFields: Partial<InsertProfile>): Promise<Profile | undefined> {
+    try {
+      const result = await db.update(profiles).set(updatedFields).where({ id }).returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      return undefined;
+    }
+  }
+
+  async deleteProfile(id: number): Promise<boolean> {
+    try {
+      // Check if profile is in use
+      const leadGenAssignmentCount = await db.select({ count: { count: "id" } })
+        .from(leadGenAssignments)
+        .where({ profileId: id });
+      
+      const salesAssignmentCount = await db.select({ count: { count: "id" } })
+        .from(salesAssignments)
+        .where({ profileId: id });
+      
+      const targetCount = await db.select({ count: { count: "id" } })
+        .from(targets)
+        .where({ profileId: id });
+      
+      const progressUpdateCount = await db.select({ count: { count: "id" } })
+        .from(progressUpdates)
+        .where({ profileId: id });
+      
+      const leadEntryCount = await db.select({ count: { count: "id" } })
+        .from(leadEntries)
+        .where({ profileId: id });
+      
+      // If profile is in use, don't delete
+      if (leadGenAssignmentCount[0].count > 0 || 
+          salesAssignmentCount[0].count > 0 || 
+          targetCount[0].count > 0 || 
+          progressUpdateCount[0].count > 0 || 
+          leadEntryCount[0].count > 0) {
+        return false;
+      }
+      
+      // Delete profile
+      const result = await db.delete(profiles).where({ id });
+      return true;
+    } catch (error) {
+      console.error('Error deleting profile:', error);
+      return false;
+    }
+  }
+
+  // Lead Gen Assignment operations
+  async getLeadGenAssignment(userId: number): Promise<LeadGenAssignment | undefined> {
+    try {
+      const result = await db.select().from(leadGenAssignments).where({ userId }).limit(1);
+      return result[0];
+    } catch (error) {
+      console.error('Error getting lead gen assignment:', error);
+      return undefined;
+    }
+  }
+
+  async getLeadGenAssignments(): Promise<LeadGenAssignment[]> {
+    try {
+      return await db.select().from(leadGenAssignments);
+    } catch (error) {
+      console.error('Error getting lead gen assignments:', error);
+      return [];
+    }
+  }
+
+  async createLeadGenAssignment(assignment: InsertLeadGenAssignment): Promise<LeadGenAssignment> {
+    try {
+      // Check if user already has an assignment
+      const existingAssignment = await this.getLeadGenAssignment(assignment.userId);
+      if (existingAssignment) {
+        // Update existing assignment
+        const result = await db.update(leadGenAssignments)
+          .set({ profileId: assignment.profileId })
+          .where({ userId: assignment.userId })
+          .returning();
+        return result[0];
+      }
+      
+      // Create new assignment
+      const result = await db.insert(leadGenAssignments).values(assignment).returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error creating lead gen assignment:', error);
+      throw error;
+    }
+  }
+
+  async deleteLeadGenAssignment(userId: number): Promise<boolean> {
+    try {
+      await db.delete(leadGenAssignments).where({ userId });
+      return true;
+    } catch (error) {
+      console.error('Error deleting lead gen assignment:', error);
+      return false;
+    }
+  }
+
+  async updateLeadGenAssignment(userId: number, profileId: number): Promise<LeadGenAssignment | undefined> {
+    try {
+      const result = await db.update(leadGenAssignments)
+        .set({ profileId })
+        .where({ userId })
+        .returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error updating lead gen assignment:', error);
+      return undefined;
+    }
+  }
+
+  // Sales Assignment operations
+  async getSalesAssignments(userId?: number): Promise<SalesAssignment[]> {
+    try {
+      if (userId) {
+        return await db.select().from(salesAssignments).where({ userId });
+      }
+      return await db.select().from(salesAssignments);
+    } catch (error) {
+      console.error('Error getting sales assignments:', error);
+      return [];
+    }
+  }
+
+  async createSalesAssignment(assignment: InsertSalesAssignment): Promise<SalesAssignment> {
+    try {
+      // Check if assignment already exists
+      const existingAssignments = await db.select()
+        .from(salesAssignments)
+        .where({ userId: assignment.userId, profileId: assignment.profileId })
+        .limit(1);
+      
+      if (existingAssignments.length > 0) {
+        return existingAssignments[0];
+      }
+      
+      // Create new assignment
+      const result = await db.insert(salesAssignments).values(assignment).returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error creating sales assignment:', error);
+      throw error;
+    }
+  }
+
+  async deleteSalesAssignment(id: number): Promise<boolean> {
+    try {
+      await db.delete(salesAssignments).where({ id });
+      return true;
+    } catch (error) {
+      console.error('Error deleting sales assignment:', error);
+      return false;
+    }
+  }
+
+  // Target operations
+  async getTargets(userId?: number): Promise<Target[]> {
+    try {
+      if (userId) {
+        return await db.select().from(targets).where({ userId });
+      }
+      return await db.select().from(targets);
+    } catch (error) {
+      console.error('Error getting targets:', error);
+      return [];
+    }
+  }
+
+  async createTarget(target: InsertTarget): Promise<Target> {
+    try {
+      const result = await db.insert(targets).values(target).returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error creating target:', error);
+      throw error;
+    }
+  }
+
+  async updateTarget(id: number, jobsToFetch: number, jobsToApply: number): Promise<Target | undefined> {
+    try {
+      const result = await db.update(targets)
+        .set({ jobsToFetch, jobsToApply })
+        .where({ id })
+        .returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error updating target:', error);
+      return undefined;
+    }
+  }
+
+  async deleteTarget(id: number): Promise<boolean> {
+    try {
+      await db.delete(targets).where({ id });
+      return true;
+    } catch (error) {
+      console.error('Error deleting target:', error);
+      return false;
+    }
+  }
+
+  // Resume operations
+  async getProfileResume(profileId: number): Promise<{content: string, filename: string} | undefined> {
+    try {
+      const profile = await this.getProfile(profileId);
+      if (!profile || !profile.resumeContent) return undefined;
+      
+      return {
+        content: profile.resumeContent,
+        filename: `${profile.name.replace(/\s+/g, '_')}_Resume.pdf`
+      };
+    } catch (error) {
+      console.error('Error getting profile resume:', error);
+      return undefined;
+    }
+  }
+
+  // Progress Update operations
+  async getProgressUpdates(userId?: number, fromDate?: Date, toDate?: Date): Promise<ProgressUpdate[]> {
+    try {
+      let query = db.select().from(progressUpdates);
+      
+      if (userId) {
+        query = query.where({ userId });
+      }
+      
+      if (fromDate) {
+        query = query.where('date', '>=', fromDate);
+      }
+      
+      if (toDate) {
+        query = query.where('date', '<=', toDate);
+      }
+      
+      return await query;
+    } catch (error) {
+      console.error('Error getting progress updates:', error);
+      return [];
+    }
+  }
+
+  async createProgressUpdate(update: InsertProgressUpdate): Promise<ProgressUpdate> {
+    try {
+      const result = await db.insert(progressUpdates).values(update).returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error creating progress update:', error);
+      throw error;
+    }
+  }
+
+  // Lead Entry operations
+  async getLeadEntries(userId?: number, fromDate?: Date, toDate?: Date): Promise<LeadEntry[]> {
+    try {
+      let query = db.select().from(leadEntries);
+      
+      if (userId) {
+        query = query.where({ userId });
+      }
+      
+      if (fromDate) {
+        query = query.where('date', '>=', fromDate);
+      }
+      
+      if (toDate) {
+        query = query.where('date', '<=', toDate);
+      }
+      
+      return await query;
+    } catch (error) {
+      console.error('Error getting lead entries:', error);
+      return [];
+    }
+  }
+
+  async createLeadEntry(entry: InsertLeadEntry): Promise<LeadEntry> {
+    try {
+      const result = await db.insert(leadEntries).values(entry).returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error creating lead entry:', error);
+      throw error;
+    }
+  }
+
+  async updateLeadEntry(id: number, entry: Partial<InsertLeadEntry>): Promise<LeadEntry | undefined> {
+    try {
+      const result = await db.update(leadEntries).set(entry).where({ id }).returning();
+      return result[0];
+    } catch (error) {
+      console.error('Error updating lead entry:', error);
+      return undefined;
+    }
+  }
+
+  // Combined data operations
+  async getUserAssignedProfile(userId: number): Promise<{profile: Profile, target?: Target} | undefined> {
+    try {
+      const user = await this.getUser(userId);
+      if (!user) return undefined;
+      
+      if (user.role === 'lead_gen') {
+        const assignment = await this.getLeadGenAssignment(userId);
+        if (!assignment) return undefined;
+        
+        const profile = await this.getProfile(assignment.profileId);
+        if (!profile) return undefined;
+        
+        const userTargets = await this.getTargets(userId);
+        const target = userTargets.find(t => t.profileId === profile.id);
+        
+        return { profile, target };
+      } else if (user.role === 'sales') {
+        // For sales users, return the first assigned profile
+        const assignments = await this.getSalesAssignments(userId);
+        if (assignments.length === 0) return undefined;
+        
+        const profile = await this.getProfile(assignments[0].profileId);
+        if (!profile) return undefined;
+        
+        return { profile };
+      }
+      
+      return undefined;
+    } catch (error) {
+      console.error('Error getting user assigned profile:', error);
+      return undefined;
+    }
+  }
+
+  async getUserAssignedProfiles(userId: number): Promise<Profile[]> {
+    try {
+      const user = await this.getUser(userId);
+      if (!user) return [];
+      
+      if (user.role === 'lead_gen') {
+        const assignment = await this.getLeadGenAssignment(userId);
+        if (!assignment) return [];
+        
+        const profile = await this.getProfile(assignment.profileId);
+        return profile ? [profile] : [];
+      } else if (user.role === 'sales') {
+        const assignments = await this.getSalesAssignments(userId);
+        if (assignments.length === 0) return [];
+        
+        const profiles: Profile[] = [];
+        for (const assignment of assignments) {
+          const profile = await this.getProfile(assignment.profileId);
+          if (profile) profiles.push(profile);
+        }
+        
+        return profiles;
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('Error getting user assigned profiles:', error);
+      return [];
+    }
+  }
+
+  async getTeamPerformanceData(fromDate?: Date, toDate?: Date): Promise<any[]> {
+    try {
+      // Get all progress updates for the date range
+      const progressData = await this.getProgressUpdates(undefined, fromDate, toDate);
+      
+      // Get all lead entries for the date range
+      const leadData = await this.getLeadEntries(undefined, fromDate, toDate);
+      
+      // Group data by user
+      const userPerformance: Record<number, any> = {};
+      
+      // Process progress updates
+      for (const update of progressData) {
+        if (!userPerformance[update.userId]) {
+          const user = await this.getUser(update.userId);
+          userPerformance[update.userId] = {
+            userId: update.userId,
+            name: user?.name || 'Unknown',
+            email: user?.email || '',
+            role: user?.role || '',
+            jobsFetched: 0,
+            jobsApplied: 0,
+            newLeads: 0,
+            clientRejections: 0,
+            teamRejections: 0
+          };
+        }
+        
+        userPerformance[update.userId].jobsFetched += update.jobsFetched;
+        userPerformance[update.userId].jobsApplied += update.jobsApplied;
+      }
+      
+      // Process lead entries
+      for (const entry of leadData) {
+        if (!userPerformance[entry.userId]) {
+          const user = await this.getUser(entry.userId);
+          userPerformance[entry.userId] = {
+            userId: entry.userId,
+            name: user?.name || 'Unknown',
+            email: user?.email || '',
+            role: user?.role || '',
+            jobsFetched: 0,
+            jobsApplied: 0,
+            newLeads: 0,
+            clientRejections: 0,
+            teamRejections: 0
+          };
+        }
+        
+        userPerformance[entry.userId].newLeads += entry.newLeads;
+        userPerformance[entry.userId].clientRejections += entry.clientRejections;
+        userPerformance[entry.userId].teamRejections += entry.teamRejections;
+      }
+      
+      return Object.values(userPerformance);
+    } catch (error) {
+      console.error('Error getting team performance data:', error);
+      return [];
+    }
+  }
+
+  // Initialize default users
+  async initializeDefaultUsers(): Promise<void> {
+    const defaultUsers: InsertUser[] = [
+      {
+        username: "manager1",
+        password: "password123",
+        name: "Manager User",
+        email: "manager@example.com",
+        role: "manager"
+      },
+      {
+        username: "leadgen1",
+        password: "password123",
+        name: "Lead Gen User 1",
+        email: "leadgen1@example.com",
+        role: "lead_gen"
+      },
+      {
+        username: "leadgen2",
+        password: "password123",
+        name: "Lead Gen User 2",
+        email: "leadgen2@example.com",
+        role: "lead_gen"
+      },
+      {
+        username: "sales1",
+        password: "password123",
+        name: "Sales User 1",
+        email: "sales1@example.com",
+        role: "sales"
+      },
+      {
+        username: "sales2",
+        password: "password123",
+        name: "Sales User 2",
+        email: "sales2@example.com",
+        role: "sales"
+      }
+    ];
+
+    for (const user of defaultUsers) {
+      try {
+        const existingUser = await this.getUserByUsername(user.username);
+        if (!existingUser) {
+          await this.createUser(user);
+          console.log(`Created default user: ${user.username}`);
+        }
+      } catch (error) {
+        console.error(`Error creating default user ${user.username}:`, error);
+      }
+    }
+  }
+}
+
+// Use database storage instead of memory storage
+export const storage = new DatabaseStorage();

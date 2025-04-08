@@ -273,21 +273,10 @@ export default function ManageProfilesPage() {
   
   // Function to download resume
   const handleDownloadResume = (profile: any) => {
-    if (profile.resumeBuffer) {
-      // If we have a PDF file buffer, download it as PDF
+    try {
+      // Download original PDF from server
       window.open(`/api/profiles/${profile.id}/resume`, '_blank');
-    } else if (profile.resumeContent) {
-      // Fallback to text download if only resumeContent is available
-      const blob = new Blob([profile.resumeContent], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${profile.name.replace(/\s+/g, '_')}_resume.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } else {
+    } catch (error) {
       toast({
         title: "Resume not available",
         description: "This profile doesn't have a resume to download.",
@@ -343,7 +332,7 @@ export default function ManageProfilesPage() {
             onClick={() => handleDownloadResume(row.original)}
           >
             <Download className="h-4 w-4 mr-1" />
-            {row.original.resumeBuffer ? "Download PDF" : "Download Text"}
+            Download
           </Button>
           <Button
             variant="outline"
@@ -581,16 +570,39 @@ export default function ManageProfilesPage() {
       <Dialog open={isViewResumeDialogOpen} onOpenChange={setIsViewResumeDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
           <DialogHeader>
-            <DialogTitle>Resume Content</DialogTitle>
+            <DialogTitle>Resume Preview</DialogTitle>
             <DialogDescription>
               View the formatted resume content for this profile
             </DialogDescription>
           </DialogHeader>
           
           <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
-            <div className="p-6 bg-gray-50 border-b">
-              <div className="font-mono text-sm whitespace-pre-wrap leading-relaxed">
-                {resumeToView}
+            <div className="p-6 bg-white border-b">
+              <div className="prose prose-sm max-w-none">
+                {resumeToView && resumeToView.split('\n').map((line, index) => {
+                  // Check if line is a header (name or title)
+                  if (index < 2) {
+                    return <h3 key={index} className="font-bold text-lg mb-1">{line}</h3>
+                  }
+                  
+                  // Check if line is a section header 
+                  if (line.endsWith(':')) {
+                    return <h4 key={index} className="font-bold text-base mt-4 mb-2">{line}</h4>
+                  }
+                  
+                  // Check if line is a bullet point
+                  if (line.trim().startsWith('-')) {
+                    return (
+                      <div key={index} className="flex ml-2 my-1">
+                        <span className="mr-2">•</span>
+                        <span>{line.trim().substring(1).trim()}</span>
+                      </div>
+                    )
+                  }
+                  
+                  // Regular line
+                  return <p key={index} className={line.trim() === '' ? 'my-3' : 'my-1'}>{line}</p>
+                })}
               </div>
             </div>
           </div>
