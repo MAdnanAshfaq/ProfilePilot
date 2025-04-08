@@ -28,7 +28,9 @@ export const profiles = pgTable("profiles", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description").notNull(),
-  resumeContent: text("resume_content"), // Store the resume content or file path
+  resumeContent: text("resume_content"), // Store the parsed resume text content
+  resumeFileName: text("resume_file_name"), // Original filename of the uploaded PDF
+  resumeBuffer: text("resume_buffer"), // Base64 encoded PDF binary for download
   createdBy: integer("created_by").references(() => users.id), // Track who created the profile
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -38,10 +40,14 @@ export const insertProfileSchema = createInsertSchema(profiles)
     name: true,
     description: true,
     resumeContent: true,
+    resumeFileName: true,
+    resumeBuffer: true,
     createdBy: true,
   })
   .extend({
-    resumeContent: z.string().min(1, "Resume content is required")
+    resumeContent: z.string().min(1, "Resume content is required"),
+    resumeFileName: z.string().optional(),
+    resumeBuffer: z.string().optional(),
   });
 
 export type InsertProfile = z.infer<typeof insertProfileSchema>;

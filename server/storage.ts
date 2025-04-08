@@ -176,6 +176,8 @@ export class MemStorage implements IStorage {
       ...insertProfile,
       id,
       resumeContent: insertProfile.resumeContent || null,
+      resumeFileName: insertProfile.resumeFileName || null,
+      resumeBuffer: insertProfile.resumeBuffer || null,
       createdBy: insertProfile.createdBy || null,
       createdAt: new Date(),
     };

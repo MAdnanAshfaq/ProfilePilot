@@ -4,6 +4,24 @@ import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { z } from "zod";
 import { insertProfileSchema, insertLeadGenAssignmentSchema, insertSalesAssignmentSchema, insertTargetSchema, insertProgressUpdateSchema, insertLeadEntrySchema } from "@shared/schema";
+import multer from "multer";
+import path from "path";
+import { parsePdfBuffer, bufferToBase64, base64ToBuffer } from "./pdf-utils";
+
+// Configure multer for PDF file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const extname = path.extname(file.originalname).toLowerCase();
+    if (extname !== '.pdf') {
+      return cb(new Error('Only PDF files are allowed'));
+    }
+    cb(null, true);
+  },
+});
 
 // Middleware to check if user is authenticated
 const isAuthenticated = (req: Request, res: Response, next: Function) => {
@@ -68,6 +86,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(profile);
     } catch (error) {
       res.status(500).json({ message: "Failed to create profile" });
+    }
+  });
+  
+  // PDF upload route
+  app.post("/api/profiles/upload-resume", hasRole(["manager"]), upload.single('resumeFile'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No PDF file uploaded" });
+      }
+      
+      const pdfBuffer = req.file.buffer;
+      const resumeContent = await parsePdfBuffer(pdfBuffer);
+      const resumeBuffer = bufferToBase64(pdfBuffer);
+      
+      res.json({
+        resumeContent,
+        resumeFileName: req.file.originalname,
+        resumeBuffer
+      });
+    } catch (error) {
+      console.error('Error processing PDF:', error);
+      res.status(500).json({ message: "Failed to process PDF file" });
     }
   });
   
@@ -436,6 +476,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(profiles);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch assigned profiles" });
+    }
+  });
+  
+  // PDF download route - accessible to anyone with an assigned profile
+  app.get("/api/profiles/:id/resume", isAuthenticated, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const profile = await storage.getProfile(id);
+      
+      if (!profile || !profile.resumeBuffer) {
+        return res.status(404).json({ message: "Resume not found" });
+      }
+      
+      // Check if user is authorized to download this resume
+      const user = req.user!;
+      let authorized = false;
+      
+      if (user.role === "manager") {
+        authorized = true;
+      } else if (user.role === "lead_gen") {
+        const assignment = await storage.getLeadGenAssignment(user.id);
+        authorized = assignment?.profileId === id;
+      } else if (user.role === "sales") {
+        const assignments = await storage.getSalesAssignments(user.id);
+        authorized = assignments.some(a => a.profileId === id);
+      }
+      
+      if (!authorized) {
+        return res.status(403).json({ message: "You don't have permission to access this resume" });
+      }
+      
+      // Send the PDF file
+      const buffer = base64ToBuffer(profile.resumeBuffer);
+      const fileName = profile.resumeFileName || `resume-${id}.pdf`;
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.send(buffer);
+    } catch (error) {
+      console.error('Error downloading resume:', error);
+      res.status(500).json({ message: "Failed to download resume" });
     }
   });
   

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loading } from "@/components/ui/loading";
 import { DataTable } from "@/components/ui/data-table";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Edit, Trash2, FileText, Download } from "lucide-react";
+import { Plus, Edit, Trash2, FileText, Download, Upload, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,12 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
+import { 
+  Tabs, 
+  TabsContent, 
+  TabsList, 
+  TabsTrigger 
+} from "@/components/ui/tabs";
 
 // Validation schema for profiles
 const profileSchema = z.object({
@@ -45,6 +51,9 @@ export default function ManageProfilesPage() {
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
   const [isViewResumeDialogOpen, setIsViewResumeDialogOpen] = useState(false);
   const [resumeToView, setResumeToView] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form handling
   const profileForm = useForm<ProfileFormData>({
@@ -54,6 +63,57 @@ export default function ManageProfilesPage() {
       description: "",
       resumeContent: ""
     },
+  });
+  
+  // PDF Upload handling
+  const uploadResumeMutation = useMutation({
+    mutationFn: async (file: File) => {
+      setIsUploading(true);
+      setUploadProgress(10);
+      
+      const formData = new FormData();
+      formData.append('resumeFile', file);
+      
+      const response = await fetch('/api/profiles/upload-resume', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      
+      setUploadProgress(90);
+      
+      if (!response.ok) {
+        throw new Error('Failed to upload resume');
+      }
+      
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setUploadProgress(100);
+      
+      profileForm.setValue('resumeContent', data.resumeContent);
+      
+      toast({
+        title: "Resume uploaded",
+        description: "Resume has been successfully processed.",
+      });
+      
+      // Reset after a short delay to show 100% progress
+      setTimeout(() => {
+        setIsUploading(false);
+        setUploadProgress(0);
+      }, 500);
+    },
+    onError: (error: Error) => {
+      setIsUploading(false);
+      setUploadProgress(0);
+      
+      toast({
+        title: "Failed to upload resume",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   });
 
   // Query to fetch profiles
@@ -175,27 +235,65 @@ export default function ManageProfilesPage() {
     setIsViewResumeDialogOpen(true);
   };
 
-  // Function to create a downloadable resume
+  // Function to handle file input change
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (file.type !== 'application/pdf') {
+        toast({
+          title: "Invalid file type",
+          description: "Please upload a PDF file.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "Please upload a PDF file smaller than 5MB.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Upload the file
+      uploadResumeMutation.mutate(file);
+    }
+  };
+  
+  // Function to trigger file input click
+  const handleUploadClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+  
+  // Function to download resume
   const handleDownloadResume = (profile: any) => {
-    const resumeContent = profile.resumeContent;
-    if (!resumeContent) {
+    if (profile.resumeBuffer) {
+      // If we have a PDF file buffer, download it as PDF
+      window.open(`/api/profiles/${profile.id}/resume`, '_blank');
+    } else if (profile.resumeContent) {
+      // Fallback to text download if only resumeContent is available
+      const blob = new Blob([profile.resumeContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${profile.name.replace(/\s+/g, '_')}_resume.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } else {
       toast({
         title: "Resume not available",
         description: "This profile doesn't have a resume to download.",
         variant: "destructive"
       });
-      return;
     }
-
-    const blob = new Blob([resumeContent], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${profile.name.replace(/\s+/g, '_')}_resume.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   // Profile table columns
@@ -245,7 +343,7 @@ export default function ManageProfilesPage() {
             onClick={() => handleDownloadResume(row.original)}
           >
             <Download className="h-4 w-4 mr-1" />
-            Download
+            {row.original.resumeBuffer ? "Download PDF" : "Download Text"}
           </Button>
           <Button
             variant="outline"
@@ -358,19 +456,71 @@ export default function ManageProfilesPage() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="resumeContent">Resume Content</Label>
-                <Textarea
-                  id="resumeContent"
-                  placeholder="Paste the full resume content here"
-                  rows={10}
-                  className="font-mono text-sm"
-                  {...profileForm.register("resumeContent")}
-                />
-                {profileForm.formState.errors.resumeContent && (
-                  <p className="text-sm text-red-500">
-                    {profileForm.formState.errors.resumeContent.message}
-                  </p>
-                )}
+                <Label>Resume Content</Label>
+                
+                <Tabs defaultValue="text" className="w-full">
+                  <TabsList className="mb-2">
+                    <TabsTrigger value="text">Text Input</TabsTrigger>
+                    <TabsTrigger value="upload">Upload PDF</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="text" className="space-y-3">
+                    <Textarea
+                      id="resumeContent"
+                      placeholder="Paste the full resume content here"
+                      rows={10}
+                      className="font-mono text-sm w-full"
+                      {...profileForm.register("resumeContent")}
+                    />
+                    {profileForm.formState.errors.resumeContent && (
+                      <p className="text-sm text-red-500">
+                        {profileForm.formState.errors.resumeContent.message}
+                      </p>
+                    )}
+                  </TabsContent>
+                  
+                  <TabsContent value="upload" className="space-y-3">
+                    <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-md">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept=".pdf"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                      
+                      {isUploading ? (
+                        <div className="flex flex-col items-center space-y-2">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                          <p className="text-sm text-gray-500">Uploading and parsing PDF...</p>
+                          <div className="w-full h-2 bg-gray-200 rounded-full mt-2">
+                            <div 
+                              className="h-full bg-primary rounded-full" 
+                              style={{ width: `${uploadProgress}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="h-12 w-12 text-gray-400 mb-3" />
+                          <p className="text-sm font-medium mb-1">Upload a PDF resume</p>
+                          <p className="text-xs text-gray-500 mb-3">Maximum file size: 5MB</p>
+                          <Button 
+                            type="button" 
+                            variant="secondary" 
+                            onClick={handleUploadClick}
+                          >
+                            Select PDF File
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                    
+                    <p className="text-sm text-gray-500">
+                      The PDF will be parsed and its content will be extracted automatically.
+                    </p>
+                  </TabsContent>
+                </Tabs>
               </div>
             </div>
             
@@ -429,16 +579,32 @@ export default function ManageProfilesPage() {
 
       {/* View Resume Dialog */}
       <Dialog open={isViewResumeDialogOpen} onOpenChange={setIsViewResumeDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>Resume Content</DialogTitle>
+            <DialogDescription>
+              View the formatted resume content for this profile
+            </DialogDescription>
           </DialogHeader>
           
-          <div className="bg-gray-50 p-4 rounded border font-mono text-sm whitespace-pre-wrap">
-            {resumeToView}
+          <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
+            <div className="p-6 bg-gray-50 border-b">
+              <div className="font-mono text-sm whitespace-pre-wrap leading-relaxed">
+                {resumeToView}
+              </div>
+            </div>
           </div>
           
-          <DialogFooter>
+          <DialogFooter className="mt-4 space-x-2">
+            <Button 
+              type="button" 
+              variant="outline"
+              onClick={() => window.print()}
+              className="flex items-center"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Print Resume
+            </Button>
             <Button 
               type="button" 
               onClick={() => setIsViewResumeDialogOpen(false)}
