@@ -167,3 +167,4 @@ export function setupAuth(app: Express) {
     res.json(req.user);
   });
 }
+const sessionSecret = process.env.SESSION_SECRET || randomBytes(32).toString('hex');
