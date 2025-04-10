@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: profilepilot
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: NODE_ENV=production node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: profilepilot-db
+          property: connectionString
+
+databases:
+  - name: profilepilot-db
+    databaseName: profilepilot
+    user: profilepilot 
